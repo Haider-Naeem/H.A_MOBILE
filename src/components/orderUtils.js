@@ -59,7 +59,7 @@ doc.text(
   doc.text(`Date: ${dateStr}`, ML, y);
   const isPending = order.status !== 'received';
   doc.setFont('helvetica', 'bold'); doc.setTextColor(...(isPending ? [180, 100, 0] : [5, 150, 105]));
-  doc.text(`Status: ${isPending ? 'Pending' : '✓ Received'}`, MR, y, { align: 'right' });
+  doc.text(`Status: ${isPending ? 'Pending' : 'Received'}`, MR, y, { align: 'right' });
   doc.setTextColor(...DARK); y += 10;
 
   // Table
