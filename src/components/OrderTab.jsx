@@ -3,7 +3,7 @@ import {
   Building2, Phone, MapPin, Package, Plus, Trash2,
   Send, Clock, CheckCircle, Search, X,
   MessageCircle, Download, History, ShoppingCart,
-  Users,
+  Users, Edit3, FileText,
 } from 'lucide-react';
 import { supabase } from '../supabase-config';
 import {
@@ -124,6 +124,15 @@ async function updateVendorInDB(vendorItem, updatedData, setSavedVendors) {
 // ══════════════════════════════════════════════════════════════════════════════
 export default function OrderTab({ inventory, orders }) {
   const [view, setView] = useState('create');
+  const [showManualEntry, setShowManualEntry] = useState(false);
+
+  // ── Manual Product Entry ────────────────────────────────────────────────────
+  const [manualProduct, setManualProduct] = useState({
+    name: '',
+    brand: '',
+    type: '',
+    quantity: 1,
+  });
 
   // ── Vendor autocomplete (create form) ─────────────────────────────────────
   const [vendorName,     setVendorName]     = useState('');
@@ -249,15 +258,58 @@ export default function OrderTab({ inventory, orders }) {
     );
 
   // ── Cart helpers ───────────────────────────────────────────────────────────
-  const addToOrder    = (p) => {
+  const addToOrder = (p) => {
     if (orderItems.find((i) => i.id === p.id)) return;
     setOrderItems((prev) => [
       ...prev,
-      { id: p.id, name: p.name, brand: p.brand || '—', type: p.type, currentStock: p.stock, orderQuantity: 10 },
+      { 
+        id: p.id, 
+        name: p.name, 
+        brand: p.brand || '—', 
+        type: p.type, 
+        currentStock: p.stock, 
+        orderQuantity: 10,
+        isManual: false 
+      },
     ]);
   };
+
+  const addManualProduct = () => {
+    if (!manualProduct.name.trim()) {
+      alert('Please enter product name');
+      return;
+    }
+    if (!manualProduct.quantity || manualProduct.quantity < 1) {
+      alert('Please enter valid quantity');
+      return;
+    }
+
+    const newId = `manual_${Date.now()}_${Math.random()}`;
+    setOrderItems((prev) => [
+      ...prev,
+      {
+        id: newId,
+        name: manualProduct.name.trim(),
+        brand: manualProduct.brand.trim() || 'New',
+        type: manualProduct.type.trim() || 'General',
+        currentStock: 0,
+        orderQuantity: manualProduct.quantity,
+        isManual: true,
+        manualDetails: {
+          name: manualProduct.name.trim(),
+          brand: manualProduct.brand.trim() || 'New',
+          type: manualProduct.type.trim() || 'General',
+        }
+      },
+    ]);
+    
+    // Reset manual product form
+    setManualProduct({ name: '', brand: '', type: '', quantity: 1 });
+    setShowManualEntry(false);
+  };
+
   const removeFromOrder = (id) => setOrderItems((prev) => prev.filter((i) => i.id !== id));
-  const updateQty       = (id, qty) =>
+  const updateQty = (id, qty) =>
     setOrderItems((prev) =>
       prev.map((i) => {
         if (i.id !== id) return i;
@@ -280,7 +332,12 @@ export default function OrderTab({ inventory, orders }) {
         vendor_name:    vendorName.trim(),
         vendor_phone:   vendorPhone.trim(),
         vendor_address: vendorAddress.trim(),
-        items:          orderItems,
+        items:          orderItems.map(item => ({
+          ...item,
+          // Ensure manual items are properly flagged in the stored order
+          isManual: item.isManual || false,
+          manualDetails: item.manualDetails || null
+        })),
         status:         'pending',
         created_at:     new Date().toISOString(),
       };
@@ -558,14 +615,22 @@ export default function OrderTab({ inventory, orders }) {
                     </span>
                   )}
                 </div>
-                {showProductTable && filteredProducts.length > 0 && (
+                <div className="flex gap-2">
                   <button
-                    className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg bg-gradient-to-br from-cyan-700 to-cyan-500 text-white text-xs font-semibold shadow hover:-translate-y-px transition-all"
-                    onClick={() => filteredProducts.forEach((p) => addToOrder(p))}
+                    className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg bg-gradient-to-br from-emerald-600 to-emerald-500 text-white text-xs font-semibold shadow hover:-translate-y-px transition-all"
+                    onClick={() => setShowManualEntry(true)}
                   >
-                    <Plus size={13} /> Add All
+                    <Edit3 size={13} /> Add New Product
                   </button>
-                )}
+                  {showProductTable && filteredProducts.length > 0 && (
+                    <button
+                      className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg bg-gradient-to-br from-cyan-700 to-cyan-500 text-white text-xs font-semibold shadow hover:-translate-y-px transition-all"
+                      onClick={() => filteredProducts.forEach((p) => addToOrder(p))}
+                    >
+                      <Plus size={13} /> Add All
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Search */}
@@ -586,7 +651,77 @@ export default function OrderTab({ inventory, orders }) {
                 </div>
               </div>
 
-              {/* Product Table — Type always visible; widths spaced evenly */}
+              {/* Manual Product Entry Modal */}
+              {showManualEntry && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] p-4" onClick={() => setShowManualEntry(false)}>
+                  <div className="bg-white rounded-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-xl font-bold text-cyan-800 flex items-center gap-2">
+                        <Edit3 size={20} /> Add New Product
+                      </h3>
+                      <button onClick={() => setShowManualEntry(false)} className="text-slate-400 hover:text-slate-600">
+                        <X size={24} />
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className={labelCls}>Product Name <span className="text-red-500">*</span></label>
+                        <input
+                          className={inputCls}
+                          placeholder="Enter product name"
+                          value={manualProduct.name}
+                          onChange={(e) => setManualProduct({ ...manualProduct, name: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Brand</label>
+                        <input
+                          className={inputCls}
+                          placeholder="Enter brand name"
+                          value={manualProduct.brand}
+                          onChange={(e) => setManualProduct({ ...manualProduct, brand: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Type/Category</label>
+                        <input
+                          className={inputCls}
+                          placeholder="Enter product type"
+                          value={manualProduct.type}
+                          onChange={(e) => setManualProduct({ ...manualProduct, type: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Order Quantity <span className="text-red-500">*</span></label>
+                        <input
+                          type="number"
+                          min="1"
+                          className={inputCls}
+                          placeholder="Enter quantity"
+                          value={manualProduct.quantity}
+                          onChange={(e) => setManualProduct({ ...manualProduct, quantity: parseInt(e.target.value) || 1 })}
+                        />
+                      </div>
+                      <div className="flex gap-3 pt-4">
+                        <button
+                          className="flex-1 py-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all"
+                          onClick={() => setShowManualEntry(false)}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          className="flex-1 py-2 rounded-lg bg-gradient-to-br from-emerald-600 to-emerald-500 text-white font-semibold hover:-translate-y-px transition-all"
+                          onClick={addManualProduct}
+                        >
+                          Add to Order
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Product Table */}
               {!showProductTable ? (
                 <div className="text-center py-10 px-4 text-slate-400">
                   <Package size={44} className="mx-auto mb-2.5 opacity-20" />
@@ -604,11 +739,10 @@ export default function OrderTab({ inventory, orders }) {
                   <table className="w-full border-collapse text-sm" style={{ minWidth: '300px' }}>
                     <thead className="sticky top-0 z-10">
                       <tr className="bg-gradient-to-r from-cyan-800 to-cyan-600">
-                        {/* evenly distributed: Brand 18%, Product auto, Type 18%, Qty 10%, Action 14% */}
                         <th className="px-2 py-1.5 text-left   text-[10px] font-bold uppercase tracking-wide text-white w-[18%]">Brand</th>
                         <th className="px-2 py-1.5 text-left   text-[10px] font-bold uppercase tracking-wide text-white">Product</th>
                         <th className="px-2 py-1.5 text-center text-[10px] font-bold uppercase tracking-wide text-white w-[18%]">Type</th>
-                        <th className="px-2 py-1.5 text-center text-[10px] font-bold uppercase tracking-wide text-white w-[10%]">Qty</th>
+                        <th className="px-2 py-1.5 text-center text-[10px] font-bold uppercase tracking-wide text-white w-[10%]">Stock</th>
                         <th className="px-2 py-1.5 text-center text-[10px] font-bold uppercase tracking-wide text-white w-[14%]">Action</th>
                       </tr>
                     </thead>
@@ -725,7 +859,10 @@ export default function OrderTab({ inventory, orders }) {
                           {orderItems.map((item, idx) => (
                             <tr key={item.id} className={`border-b border-sky-50 ${idx % 2 === 1 ? 'bg-sky-50/50' : 'bg-white'}`}>
                               <td className="px-3 py-3">
-                                <span className="font-bold text-sm text-cyan-800 truncate block">{item.brand || '—'}</span>
+                                <span className={`font-bold text-sm truncate block ${item.isManual ? 'text-emerald-600' : 'text-cyan-800'}`}>
+                                  {item.brand || '—'}
+                                  {item.isManual && <span className="ml-1 text-[8px] bg-emerald-100 text-emerald-600 px-1 rounded">NEW</span>}
+                                </span>
                               </td>
                               <td className="px-3 py-3">
                                 <span className="font-bold text-[14px] block truncate">{item.name}</span>
@@ -743,7 +880,7 @@ export default function OrderTab({ inventory, orders }) {
                                   onBlur={() => { if (!item.orderQuantity || item.orderQuantity < 1) updateQty(item.id, 1); }}
                                   className="w-[52px] text-center border border-slate-300 rounded-md py-1.5 px-1 text-sm font-extrabold text-cyan-600 font-mono outline-none focus:border-cyan-600 focus:ring-1 focus:ring-cyan-200"
                                 />
-                              </td>
+                               </td>
                               <td className="px-2 py-3 text-center">
                                 <button
                                   className="text-red-500 hover:bg-red-50 p-1.5 rounded flex items-center justify-center transition-colors mx-auto"
@@ -751,11 +888,11 @@ export default function OrderTab({ inventory, orders }) {
                                 >
                                   <Trash2 size={15} />
                                 </button>
-                              </td>
-                            </tr>
+                               </td>
+                             </tr>
                           ))}
                         </tbody>
-                      </table>
+                       </table>
                     </div>
                   )}
                 </div>

@@ -4,7 +4,7 @@ export const SHOP = {
   name:    'H.A MOBILE',
   tagline: 'Software & Repairing',
   address: 'Almgir Market Railway Road, Rahim Yar Khan',
-  phone:   '+92-300-0000000',
+  phone:   '+92-300-6731353',
   email:   'adnanmobile@gmail.com',
 };
 

@@ -7,7 +7,7 @@ const SHOP = {
   tagline: `Software & Repairing
 We Deal In All Kind Of Mobile Accessories & Repairing`,
   address: 'Almgir Market Railway Road, Rahim Yar Khan',
-  phone:   '+92-300-0000000',
+  phone:   '+92-300-6731353',
   email:   'adnanmobile@gmail.com'
 };
 

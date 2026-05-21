@@ -1,11 +1,65 @@
 import { supabase } from '../supabase-config';
 import { X } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 export default function AddProductModal({
   showAddProductModal, setShowAddProductModal,
   editingProduct, setEditingProduct,
   form, setForm, productTypes, setProductTypes
 }) {
+  const [saving, setSaving] = useState(false);
+
+  // Load custom types from Supabase on mount
+  useEffect(() => {
+    if (showAddProductModal) {
+      loadCustomTypes();
+    }
+  }, [showAddProductModal]);
+
+  const loadCustomTypes = async () => {
+    try {
+      // Fetch distinct types from inventory
+      const { data, error } = await supabase
+        .from('inventory')
+        .select('type')
+        .not('type', 'is', null);
+      
+      if (error) throw error;
+      
+      // Get unique types
+      const types = [...new Set(data.map(item => item.type))];
+      const defaultTypes = ['Screen Protector', 'Phone Case', 'Charger', 'Cable', 'Headphone', 'Other'];
+      const allTypes = [...new Set([...defaultTypes, ...types])].sort();
+      
+      setProductTypes(allTypes);
+    } catch (err) {
+      console.error('Error loading types:', err);
+    }
+  };
+
+  const saveCustomType = async (typeName) => {
+    try {
+      // Save custom type to a separate table or just rely on inventory
+      // For now, we'll just ensure it's in the productTypes list
+      if (!productTypes.includes(typeName)) {
+        const updatedTypes = [...productTypes, typeName].sort();
+        setProductTypes(updatedTypes);
+        
+        // Optional: Save to a custom_types table for persistence
+        const { error } = await supabase
+          .from('custom_types')
+          .insert([{ type_name: typeName }])
+          .select();
+        
+        if (error && error.code !== '23505') { // Ignore duplicate error
+          console.error('Error saving custom type:', error);
+        }
+      }
+    } catch (err) {
+      console.error('Error saving custom type:', err);
+    }
+  };
+
   const handleSave = async () => {
     if (!form.brand.trim())      return alert('Brand name is required');
     if (!form.name.trim())       return alert('Product name is required');
@@ -13,11 +67,17 @@ export default function AddProductModal({
     if (!form.retailPrice || parseFloat(form.retailPrice) <= 0) return alert('Valid retail price required');
     if (form.stock === '' || parseInt(form.stock) < 0) return alert('Valid stock quantity required');
 
+    setSaving(true);
+    
     let finalType = form.type;
     if (form.type === 'Other') {
-      if (!form.customType.trim()) return alert('Please enter a custom type name');
+      if (!form.customType.trim()) {
+        setSaving(false);
+        return alert('Please enter a custom type name');
+      }
       finalType = form.customType.trim();
-      if (!productTypes.includes(finalType)) setProductTypes(p => [...p, finalType].sort());
+      // Save custom type to Supabase
+      await saveCustomType(finalType);
     }
 
     const data = {
@@ -32,16 +92,28 @@ export default function AddProductModal({
 
     try {
       if (editingProduct) {
-        const { error } = await supabase.from('inventory').update(data).eq('id', editingProduct.id);
+        const { error } = await supabase
+          .from('inventory')
+          .update(data)
+          .eq('id', editingProduct.id);
         if (error) throw error;
+        alert('Product updated successfully!');
       } else {
-        const { error } = await supabase.from('inventory').insert({ ...data, created_at: new Date().toISOString() });
+        const { error } = await supabase
+          .from('inventory')
+          .insert([{ ...data, created_at: new Date().toISOString() }]);
         if (error) throw error;
+        alert('Product added successfully!');
       }
+      
+      // Reload custom types after save
+      await loadCustomTypes();
       resetAndClose();
     } catch (err) {
       console.error(err);
       alert('Error saving product: ' + err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -111,7 +183,11 @@ export default function AddProductModal({
               value={form.type}
               onChange={e => setForm({ ...form, type: e.target.value })}
             >
-              {productTypes.map(t => <option key={t} value={t}>{t}</option>)}
+              {productTypes.map(t => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
               <option value="Other">➕ Other (Custom)</option>
             </select>
           </div>
@@ -136,7 +212,7 @@ export default function AddProductModal({
                 Buy Price (Rs.) <span className="text-red-500">*</span>
               </label>
               <input
-                type="text"
+                type="number"
                 className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 bg-white outline-none focus:border-cyan-600 focus:ring-2 focus:ring-cyan-200 transition-all"
                 placeholder="1000"
                 value={form.buyPrice}
@@ -148,7 +224,7 @@ export default function AddProductModal({
                 Retail Price (Rs.) <span className="text-red-500">*</span>
               </label>
               <input
-                type="text"
+                type="number"
                 className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 bg-white outline-none focus:border-cyan-600 focus:ring-2 focus:ring-cyan-200 transition-all"
                 placeholder="1500"
                 value={form.retailPrice}
@@ -158,24 +234,25 @@ export default function AddProductModal({
           </div>
 
           {profit !== null && (
-            <div className="flex justify-between items-center bg-emerald-50 border border-emerald-500 rounded-lg px-3.5 py-2.5 mb-4">
-              <span className="font-semibold text-emerald-600 text-sm">Profit per unit:</span>
-              <span className="font-bold text-emerald-600 text-lg">Rs.{profit.toFixed(0)}</span>
+            <div className="mb-4">
+              <div className="flex justify-between items-center bg-emerald-50 border border-emerald-500 rounded-lg px-3.5 py-2.5">
+                <span className="font-semibold text-emerald-600 text-sm">Profit per unit:</span>
+                <span className="font-bold text-emerald-600 text-lg">Rs.{profit.toFixed(0)}</span>
+              </div>
               {profit < 0 && (
-                <div className="w-full mt-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-red-50 border-l-4 border-red-500 text-red-600">
+                <div className="mt-2 px-3 py-2 rounded-lg text-sm font-medium bg-red-50 border-l-4 border-red-500 text-red-600">
                   ⚠️ Retail price is lower than buy price!
                 </div>
               )}
             </div>
           )}
-          
 
           <div>
             <label className="block text-xs font-semibold text-slate-800 mb-1.5 uppercase tracking-wide">
               Stock Quantity <span className="text-red-500">*</span>
             </label>
             <input
-              type="text"
+              type="number"
               className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 bg-white outline-none focus:border-cyan-600 focus:ring-2 focus:ring-cyan-200 transition-all"
               placeholder="50"
               min="0"
@@ -188,10 +265,18 @@ export default function AddProductModal({
         {/* Footer */}
         <div className="flex gap-3 px-6 pb-5 pt-2 border-t border-slate-100">
           <button
-            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-gradient-to-br from-cyan-700 to-cyan-500 text-white font-semibold shadow-md hover:-translate-y-px transition-all"
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-gradient-to-br from-cyan-700 to-cyan-500 text-white font-semibold shadow-md hover:-translate-y-px transition-all disabled:opacity-50"
             onClick={handleSave}
+            disabled={saving}
           >
-            {editingProduct ? '💾 Update Product' : '✓ Add Product'}
+            {saving ? (
+              <>
+                <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                Saving...
+              </>
+            ) : (
+              editingProduct ? '💾 Update Product' : '✓ Add Product'
+            )}
           </button>
           <button
             className="flex-1 py-2.5 rounded-lg bg-slate-100 text-slate-500 border border-slate-300 font-semibold hover:bg-slate-200 transition-all"
