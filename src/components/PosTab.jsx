@@ -9,7 +9,8 @@ export default function PosTab({
   customerMobile, setCustomerMobile,
   setLastReceipt, setShowReceipt,
   setShowReturnModal,
-  sales
+  sales,
+  confirm, alert
 }) {
   const [showSugg, setShowSugg]       = useState(false);
   const [loading, setLoading]         = useState(false);
@@ -30,10 +31,21 @@ export default function PosTab({
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (!showSugg || filtered.length === 0) return;
-      if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightedIndex(prev => { const next = prev + 1; return next >= filtered.length ? 0 : next; }); }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightedIndex(prev => { const next = prev - 1; return next < 0 ? filtered.length - 1 : next; }); }
-      else if (e.key === 'Enter') { e.preventDefault(); if (highlightedIndex >= 0 && highlightedIndex < filtered.length) { const p = filtered[highlightedIndex]; if (p.stock > 0) addToCart(p); } }
-      else if (e.key === 'Escape') { setShowSugg(false); setHighlightedIndex(-1); }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setHighlightedIndex(prev => { const next = prev + 1; return next >= filtered.length ? 0 : next; });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setHighlightedIndex(prev => { const next = prev - 1; return next < 0 ? filtered.length - 1 : next; });
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (highlightedIndex >= 0 && highlightedIndex < filtered.length) {
+          const p = filtered[highlightedIndex];
+          if (p.stock > 0) addToCart(p);
+        }
+      } else if (e.key === 'Escape') {
+        setShowSugg(false); setHighlightedIndex(-1);
+      }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
@@ -46,11 +58,11 @@ export default function PosTab({
     }
   }, [highlightedIndex]);
 
-  const addToCart = (p) => {
-    if (p.stock <= 0) return alert('Out of stock!');
+  const addToCart = async (p) => {
+    if (p.stock <= 0) { await alert('Out of stock!'); return; }
     const ex = cart.find(i => i.id === p.id);
     if (ex) {
-      if (ex.quantity >= p.stock) return alert(`Only ${p.stock} units available`);
+      if (ex.quantity >= p.stock) { await alert(`Only ${p.stock} units available`); return; }
       setCart(cart.map(i => i.id === p.id ? { ...i, quantity: i.quantity + 1 } : i));
     } else {
       setCart([...cart, { ...p, quantity: 1, soldAt: p.retailPrice }]);
@@ -59,12 +71,12 @@ export default function PosTab({
     searchInputRef.current?.focus();
   };
 
-  const updateQty = (id, qty) => {
+  const updateQty = async (id, qty) => {
     const item = cart.find(i => i.id === id);
     if (qty === '') { setCart(cart.map(i => i.id === id ? { ...i, quantity: '' } : i)); return; }
     const num = parseInt(qty);
     if (isNaN(num)) { setCart(cart.map(i => i.id === id ? { ...i, quantity: '' } : i)); return; }
-    if (num > item.stock) return alert(`Only ${item.stock} units available`);
+    if (num > item.stock) { await alert(`Only ${item.stock} units available`); return; }
     if (num <= 0) setCart(cart.filter(i => i.id !== id));
     else setCart(cart.map(i => i.id === id ? { ...i, quantity: num } : i));
   };
@@ -91,13 +103,18 @@ export default function PosTab({
   const total        = () => cartSubtotal() + repFees();
 
   const completeSale = async () => {
-    if (cart.length === 0 && !repFees()) return alert('Cart is empty');
+    if (cart.length === 0 && !repFees()) { await alert('Cart is empty'); return; }
     const invalidItems = cart.filter(i => !i.quantity || i.quantity === '' || !i.soldAt || i.soldAt === '');
-    if (invalidItems.length > 0) { alert('Please fill in all quantities and prices before completing the sale.'); return; }
+    if (invalidItems.length > 0) {
+      await alert('Please fill in all quantities and prices before completing the sale.');
+      return;
+    }
     setLoading(true);
     try {
       for (const item of cart) {
-        const { error } = await supabase.from('inventory').update({ stock: item.stock - item.quantity, updated_at: new Date().toISOString() }).eq('id', item.id);
+        const { error } = await supabase.from('inventory')
+          .update({ stock: item.stock - item.quantity, updated_at: new Date().toISOString() })
+          .eq('id', item.id);
         if (error) throw error;
       }
       const receiptNo = `AMS${Date.now().toString().slice(-6)}`;
@@ -106,39 +123,57 @@ export default function PosTab({
         quantity: parseInt(i.quantity), buyPrice: i.buyPrice, retailPrice: i.retailPrice,
         soldAt: parseFloat(i.soldAt), profit: (parseFloat(i.soldAt) - i.buyPrice) * parseInt(i.quantity)
       }));
-      if (repFees() > 0) items.push({ id: 'repair', name: 'Repair / Service Fees', brand: null, type: 'Service', quantity: 1, buyPrice: 0, retailPrice: repFees(), soldAt: repFees(), profit: repFees(), isRepair: true });
-      const saleData = { customer_name: customerName.trim() || 'Walk-in Customer', customer_mobile: customerMobile.trim() || 'N/A', receipt_no: receiptNo, items, total: total(), timestamp: new Date().toISOString() };
+      if (repFees() > 0) items.push({
+        id: 'repair', name: 'Repair / Service Fees', brand: null, type: 'Service',
+        quantity: 1, buyPrice: 0, retailPrice: repFees(), soldAt: repFees(), profit: repFees(), isRepair: true
+      });
+      const saleData = {
+        customer_name: customerName.trim() || 'Walk-in Customer',
+        customer_mobile: customerMobile.trim() || 'N/A',
+        receipt_no: receiptNo, items, total: total(),
+        timestamp: new Date().toISOString()
+      };
       const { data, error } = await supabase.from('sales').insert(saleData).select().single();
       if (error) throw error;
-      setLastReceipt({ ...saleData, id: data.id, receiptNo: saleData.receipt_no, customerName: saleData.customer_name, customerMobile: saleData.customer_mobile });
+      setLastReceipt({
+        ...saleData, id: data.id,
+        receiptNo: saleData.receipt_no,
+        customerName: saleData.customer_name,
+        customerMobile: saleData.customer_mobile
+      });
       setShowReceipt(true);
       setCart([]); setCustomerName(''); setCustomerMobile(''); setRepairFees('');
     } catch (err) {
-      console.error(err); alert('Sale failed: ' + err.message);
-    } finally { setLoading(false); }
+      console.error(err);
+      await alert('Sale failed: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const clearCart = () => { if (cart.length > 0 && confirm('Clear entire cart?')) { setCart([]); setRepairFees(''); } };
+  const clearCart = async () => {
+    if (cart.length > 0 && await confirm('Clear entire cart?')) {
+      setCart([]); setRepairFees('');
+    }
+  };
 
   useEffect(() => {
-    const handler = (e) => { if (searchRef.current && !searchRef.current.contains(e.target)) { setShowSugg(false); setHighlightedIndex(-1); } };
+    const handler = (e) => {
+      if (searchRef.current && !searchRef.current.contains(e.target)) {
+        setShowSugg(false); setHighlightedIndex(-1);
+      }
+    };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
   const lowStockCount = inventory.filter(p => p.stock <= 5 && p.stock > 0).length;
 
-  /*
-   * Desktop column definitions — BOTH tables now share Brand | Product | Type order
-   * Dropdown:  Brand 1fr | Product 2fr | Type 1fr | Buy 85px | Sell 85px | Stock 65px
-   * Cart:      Brand 1fr | Product 2fr | Type 1fr | QTY 72px | Price 85px | Subtotal 85px | × 32px
-   */
   const ddCols   = '1fr 2fr 1fr 85px 85px 65px';
   const cartCols = '1fr 2fr 1fr 72px 85px 85px 32px';
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Action Buttons */}
       <div className="flex gap-2.5">
         <button className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-lg bg-gradient-to-br from-cyan-700 to-cyan-500 text-white font-semibold text-sm shadow-md hover:-translate-y-px transition-all">
           <ShoppingCart size={16} /> New Sale
@@ -153,14 +188,15 @@ export default function PosTab({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
-        {/* ── Search Column ───────────────────────────────────────────── */}
+        {/* ── Search Column ── */}
         <div className="bg-white rounded-xl border border-sky-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center px-5 py-2 border-b border-sky-100 bg-gradient-to-r from-sky-50 to-cyan-50 rounded-t-xl">
-            <div className="flex items-center gap-2 text-lg font-bold text-cyan-800 sm:text-xl"><Search size={18} /> Search Products</div>
+            <div className="flex items-center gap-2 text-lg font-bold text-cyan-800 sm:text-xl">
+              <Search size={18} /> Search Products
+            </div>
           </div>
 
           <div className="p-5 flex flex-col flex-1 min-h-0">
-            {/* Search Input + Dropdown */}
             <div className="relative" ref={searchRef}>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
@@ -170,7 +206,11 @@ export default function PosTab({
                   placeholder="Search by name, brand, model..."
                   value={searchTerm}
                   autoFocus
-                  onChange={e => { setSearchTerm(e.target.value); setShowSugg(e.target.value.length > 0); setHighlightedIndex(-1); }}
+                  onChange={e => {
+                    setSearchTerm(e.target.value);
+                    setShowSugg(e.target.value.length > 0);
+                    setHighlightedIndex(-1);
+                  }}
                 />
               </div>
 
@@ -180,7 +220,6 @@ export default function PosTab({
                   className="absolute top-[calc(100%+6px)] left-0 right-0 bg-white border-2 border-cyan-600 rounded-xl shadow-2xl z-[300]"
                   style={{ maxHeight: '55vh', overflowY: 'auto' }}
                 >
-                  {/* ── Desktop header: Brand | Product | Type | Buy | Sell | Stock ── */}
                   <div
                     className="hidden sm:grid gap-2 bg-gradient-to-r from-cyan-800 to-cyan-600 text-white text-xs font-bold uppercase tracking-wide px-3.5 py-2.5 sticky top-0 rounded-t-lg"
                     style={{ gridTemplateColumns: ddCols }}
@@ -194,26 +233,22 @@ export default function PosTab({
                   </div>
 
                   {filtered.map((p, idx) => {
-                    const hl = idx === highlightedIndex;
+                    const hl  = idx === highlightedIndex;
                     const oos = p.stock <= 0;
                     const baseRow = `product-row-item border-b border-sky-50 last:border-0 cursor-pointer transition-colors
                       ${oos ? 'opacity-50 cursor-not-allowed bg-red-50' : hl ? 'bg-cyan-50 border-l-4 border-l-cyan-600' : 'hover:bg-sky-50'}`;
 
                     return (
                       <div key={p.id} onClick={() => !oos && addToCart(p)}>
-
-                        {/* ── Mobile layout: 3 rows ── */}
+                        {/* Mobile */}
                         <div className={`sm:hidden px-3 py-2.5 ${baseRow}`}>
-                          {/* Row 1: Brand · Type pill */}
                           <div className="flex items-center justify-between gap-1.5 mb-1">
                             <span className="font-semibold text-slate-500 text-xs">{p.brand || '—'}</span>
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-100 text-cyan-800 shrink-0">{p.type}</span>
                           </div>
-                          {/* Row 2: Product name */}
                           <div className="mb-2">
                             <span className="font-bold text-sm text-slate-800 block">{p.name}</span>
                           </div>
-                          {/* Row 3: Buy · Sell · Stock with labels */}
                           <div className="flex items-center gap-2">
                             <div className="flex flex-col items-center flex-1 bg-amber-50 rounded-md px-2 py-1">
                               <span className="text-[9px] font-bold uppercase text-amber-500 tracking-wide">Buy Rs.</span>
@@ -229,8 +264,7 @@ export default function PosTab({
                             </div>
                           </div>
                         </div>
-
-                        {/* ── Desktop layout: Brand | Product | Type | Buy | Sell | Stock ── */}
+                        {/* Desktop */}
                         <div
                           className={`hidden sm:grid items-center gap-2 px-3.5 py-3 text-base ${baseRow}`}
                           style={{ gridTemplateColumns: ddCols }}
@@ -262,7 +296,7 @@ export default function PosTab({
           </div>
         </div>
 
-        {/* ── Cart Column ─────────────────────────────────────────────── */}
+        {/* ── Cart Column ── */}
         <div className="bg-white rounded-xl border border-sky-200 shadow-sm overflow-hidden flex flex-col">
           <div className="flex justify-between items-center px-5 py-2 border-b border-sky-100 bg-gradient-to-r from-sky-50 to-cyan-50">
             <div className="flex items-center gap-2 text-lg font-bold text-cyan-800 sm:text-xl">
@@ -276,25 +310,22 @@ export default function PosTab({
           </div>
 
           <div className="p-5 flex flex-col flex-1 min-h-0">
-            {/* Customer Info */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
-  <input
-    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-cyan-600 focus:ring-2 focus:ring-cyan-200 transition-all sm:text-base"
-    placeholder="Customer Name (Optional)"
-    value={customerName}
-    onChange={e => setCustomerName(e.target.value)}
-  />
+              <input
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-cyan-600 focus:ring-2 focus:ring-cyan-200 transition-all sm:text-base"
+                placeholder="Customer Name (Optional)"
+                value={customerName}
+                onChange={e => setCustomerName(e.target.value)}
+              />
+              <input
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-cyan-600 focus:ring-2 focus:ring-cyan-200 transition-all sm:text-base"
+                placeholder="Mobile Number (Optional)"
+                value={customerMobile}
+                onChange={e => setCustomerMobile(e.target.value)}
+                maxLength={15}
+              />
+            </div>
 
-  <input
-    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-cyan-600 focus:ring-2 focus:ring-cyan-200 transition-all sm:text-base"
-    placeholder="Mobile Number (Optional)"
-    value={customerMobile}
-    onChange={e => setCustomerMobile(e.target.value)}
-    maxLength={15}
-  />
-</div>
-
-            {/* Cart Items */}
             <div className="flex-1 overflow-y-auto mb-3 min-h-0">
               {cart.length === 0 ? (
                 <div className="text-center py-8 text-slate-500">
@@ -304,9 +335,8 @@ export default function PosTab({
                 </div>
               ) : (
                 <>
-                  {/* ── Desktop table (sm+): Brand | Product | Type | QTY | Price | Subtotal | × ── */}
+                  {/* Desktop */}
                   <div className="hidden sm:block w-full overflow-x-auto">
-                    {/* Header */}
                     <div
                       className="grid gap-2 bg-gradient-to-r from-cyan-800 to-cyan-600 text-white text-xs font-bold uppercase tracking-wide px-3 py-2.5 rounded-t-lg"
                       style={{ gridTemplateColumns: cartCols }}
@@ -314,25 +344,20 @@ export default function PosTab({
                       <span>Brand</span>
                       <span>Product</span>
                       <span>Type</span>
-                      <span className='text-center'>QTY</span>
-                      <span className='text-center'>Price Rs.</span>
-                      <span className='text-center'>Subtotal</span>
+                      <span className="text-center">QTY</span>
+                      <span className="text-center">Price Rs.</span>
+                      <span className="text-center">Subtotal</span>
                       <span />
                     </div>
-                    {/* Rows */}
                     {cart.map(item => (
                       <div
                         key={item.id}
                         className="grid items-center gap-2 px-3 py-2.5 border-b border-sky-100 bg-gradient-to-r from-sky-50 to-cyan-50"
                         style={{ gridTemplateColumns: cartCols }}
                       >
-                        {/* Brand */}
                         <span className="text-sm text-slate-500 font-semibold truncate">{item.brand || '—'}</span>
-                        {/* Product */}
                         <span className="font-bold text-slate-800 text-base truncate">{item.name}</span>
-                        {/* Type */}
                         <span><span className="px-1.5 py-0.5 rounded-full text-xs font-semibold bg-cyan-100 text-cyan-800">{item.type}</span></span>
-                        {/* QTY */}
                         <input
                           type="text" inputMode="numeric"
                           value={item.quantity}
@@ -340,7 +365,6 @@ export default function PosTab({
                           onBlur={() => handleQtyBlur(item.id, item.quantity)}
                           className="w-full px-1 py-1.5 border border-slate-300 rounded-md text-sm font-bold text-center font-mono outline-none focus:border-cyan-600 transition-all sm:text-base"
                         />
-                        {/* Price */}
                         <input
                           type="text" inputMode="decimal"
                           value={item.soldAt}
@@ -348,11 +372,9 @@ export default function PosTab({
                           onBlur={() => handlePriceBlur(item.id, item.soldAt, item.retailPrice)}
                           className="w-full px-1 py-1.5 border border-slate-300 rounded-md text-sm font-bold text-center text-emerald-600 font-mono outline-none focus:border-cyan-600 transition-all sm:text-base"
                         />
-                        {/* Subtotal */}
                         <span className="text-center font-extrabold text-cyan-600 text-base font-mono">
                           Rs.{((parseFloat(item.soldAt) || 0) * (parseInt(item.quantity) || 0)).toFixed(0)}
                         </span>
-                        {/* Remove */}
                         <button
                           className="p-1 rounded text-red-500 hover:bg-red-50 transition-colors justify-self-center"
                           onClick={() => setCart(cart.filter(i => i.id !== item.id))}
@@ -363,11 +385,10 @@ export default function PosTab({
                     ))}
                   </div>
 
-                  {/* ── Mobile cards: 3 rows per item ── */}
+                  {/* Mobile */}
                   <div className="sm:hidden flex flex-col divide-y divide-sky-100">
                     {cart.map(item => (
                       <div key={item.id} className="px-2 py-3 bg-gradient-to-r from-sky-50 to-cyan-50">
-                        {/* Row 1: Brand · Type · × */}
                         <div className="flex items-center justify-between gap-2 mb-1">
                           <span className="font-semibold text-slate-500 text-xs">{item.brand || '—'}</span>
                           <div className="flex items-center gap-1.5 shrink-0">
@@ -380,11 +401,9 @@ export default function PosTab({
                             </button>
                           </div>
                         </div>
-                        {/* Row 2: Product name */}
                         <div className="mb-2">
                           <span className="font-bold text-slate-800 text-sm block">{item.name}</span>
                         </div>
-                        {/* Row 3: QTY · Price · Subtotal */}
                         <div className="flex items-center gap-2">
                           <div className="flex flex-col items-center gap-0.5 w-16">
                             <span className="text-[9px] font-bold uppercase text-slate-400 tracking-wide">QTY</span>
@@ -448,7 +467,6 @@ export default function PosTab({
               )}
             </div>
 
-            {/* Total & Checkout */}
             {(cart.length > 0 || repFees() > 0) && (
               <>
                 <div className="border-t-4 border-cyan-600 pt-3.5 mt-3.5">

@@ -8,7 +8,8 @@ export default function InventoryTab({
   setShowAddProductModal, setEditingProduct,
   form, setForm, productTypes,
   setShowAddStockModal, setStockProduct, setStockAmount,
-  stats, blurredCards, toggleBlur
+  stats, blurredCards, toggleBlur,
+  confirm, alert,   // ✅ custom dialog props
 }) {
   const [sortField,  setSortField]  = useState('stock');
   const [sortDir,    setSortDir]    = useState('asc');
@@ -16,7 +17,6 @@ export default function InventoryTab({
   const [exporting,  setExporting]  = useState(false);
   const [mobileView, setMobileView] = useState(window.innerWidth < 768);
 
-  // Handle window resize for mobile view
   useState(() => {
     const handleResize = () => setMobileView(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
@@ -65,12 +65,16 @@ export default function InventoryTab({
     setShowAddProductModal(true);
   };
 
+  // ✅ Replaced native confirm/alert with custom dialog
   const handleDelete = async (id, name) => {
-    if (!confirm(`Delete "${name}" permanently? This cannot be undone.`)) return;
+    const ok = await confirm(`Delete "${name}" permanently?\nThis cannot be undone.`);
+    if (!ok) return;
     try {
       const { error } = await supabase.from('inventory').delete().eq('id', id);
       if (error) throw error;
-    } catch (err) { alert('Failed to delete: ' + err.message); }
+    } catch (err) {
+      await alert('Failed to delete: ' + err.message);
+    }
   };
 
   const exportPDF = async () => {
@@ -148,7 +152,6 @@ export default function InventoryTab({
         alternateRowStyles: { fillColor: [240, 249, 255] },
         didParseCell(data) {
           data.cell.styles.halign = COL_ALIGN[data.column.index];
-
           if (data.section === 'body') {
             const p = sorted[data.row.index];
             if (data.column.index === 7) {
@@ -178,11 +181,11 @@ export default function InventoryTab({
       doc.save(`inventory-${now.toISOString().slice(0, 10)}.pdf`);
     } catch (err) {
       console.error(err);
-      alert(
-        'PDF export failed.\n\nMake sure the packages are installed:\n' +
-        'npm i jspdf jspdf-autotable',
-      );
-    } finally { setExporting(false); }
+      // ✅ Replaced native alert
+      await alert('PDF export failed.\n\nMake sure the packages are installed:\nnpm i jspdf jspdf-autotable');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const SortBtn = ({ field, children, center = false }) => (
@@ -200,11 +203,10 @@ export default function InventoryTab({
     </button>
   );
 
-  // Mobile card view component
   const MobileProductCard = ({ product }) => (
     <div className={`border rounded-lg p-4 mb-3 shadow-sm ${
-      product.stock === 0 ? 'bg-red-50 border-red-200' : 
-      product.stock <= 5 ? 'bg-orange-50 border-orange-200' : 
+      product.stock === 0 ? 'bg-red-50 border-red-200' :
+      product.stock <= 5 ? 'bg-orange-50 border-orange-200' :
       'bg-white border-sky-200'
     }`}>
       <div className="flex justify-between items-start mb-3">
@@ -233,7 +235,6 @@ export default function InventoryTab({
           </button>
         </div>
       </div>
-      
       <div className="grid grid-cols-2 gap-3 text-sm">
         <div>
           <span className="text-slate-500 text-xs">Type</span>
@@ -254,8 +255,8 @@ export default function InventoryTab({
         <div>
           <span className="text-slate-500 text-xs">Stock</span>
           <p className={`font-extrabold ${
-            product.stock === 0 ? 'text-red-600' : 
-            product.stock <= 5 ? 'text-amber-500' : 
+            product.stock === 0 ? 'text-red-600' :
+            product.stock <= 5 ? 'text-amber-500' :
             'text-slate-800'
           }`}>
             {product.stock} {product.stock <= 5 && (
@@ -293,7 +294,6 @@ export default function InventoryTab({
       {/* Search + Export + Add */}
       <div className="bg-white rounded-xl border border-sky-200 shadow-sm mb-4">
         <div className="px-4 sm:px-5 py-3.5 flex flex-col gap-3">
-          {/* Row 1 */}
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:items-center">
             <div className="relative flex-1">
               <Search
@@ -344,7 +344,7 @@ export default function InventoryTab({
             </button>
           </div>
 
-          {/* Row 2: type filter pills */}
+          {/* Type filter pills */}
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0 pr-1">
               Filter:
@@ -404,7 +404,7 @@ export default function InventoryTab({
         </div>
       </div>
 
-      {/* Responsive Table/Card View */}
+      {/* Table / Card */}
       {sorted.length === 0 ? (
         <div className="bg-white rounded-xl border border-sky-200 shadow-sm text-center py-16 px-5 text-slate-500">
           <Package size={52} className="mx-auto mb-3 opacity-25" />
@@ -426,45 +426,28 @@ export default function InventoryTab({
           )}
         </div>
       ) : mobileView ? (
-        // Mobile Card View
         <div className="space-y-3">
           {sorted.map(product => (
             <MobileProductCard key={product.id} product={product} />
           ))}
         </div>
       ) : (
-        // Desktop Table View
         <div className="bg-white rounded-xl border border-sky-200 shadow-sm overflow-x-auto">
           <div className="overflow-x-auto" style={{ minWidth: '800px' }}>
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr className="bg-gradient-to-r from-cyan-800 to-cyan-600" style={{ height: 42 }}>
-                  <th className="px-3 py-2 text-left w-[15%]">
-                    <SortBtn field="brand">Brand</SortBtn>
-                  </th>
-                  <th className="px-3 py-2 text-left w-[25%]">
-                    <SortBtn field="name">Product</SortBtn>
-                  </th>
-                  <th className="px-3 py-2 text-left w-[12%]">
-                    <SortBtn field="type">Type</SortBtn>
-                  </th>
-                  <th className="px-3 py-2 text-center w-[12%]">
-                    <SortBtn field="buyPrice" center>Buy Rs.</SortBtn>
-                  </th>
-                  <th className="px-3 py-2 text-center w-[12%]">
-                    <SortBtn field="retailPrice" center>Sell Rs.</SortBtn>
-                  </th>
-                  <th className="px-3 py-2 text-center w-[10%]">
-                    <SortBtn field="stock" center>Stock</SortBtn>
-                  </th>
+                  <th className="px-3 py-2 text-left w-[15%]"><SortBtn field="brand">Brand</SortBtn></th>
+                  <th className="px-3 py-2 text-left w-[25%]"><SortBtn field="name">Product</SortBtn></th>
+                  <th className="px-3 py-2 text-left w-[12%]"><SortBtn field="type">Type</SortBtn></th>
+                  <th className="px-3 py-2 text-center w-[12%]"><SortBtn field="buyPrice" center>Buy Rs.</SortBtn></th>
+                  <th className="px-3 py-2 text-center w-[12%]"><SortBtn field="retailPrice" center>Sell Rs.</SortBtn></th>
+                  <th className="px-3 py-2 text-center w-[10%]"><SortBtn field="stock" center>Stock</SortBtn></th>
                   <th className="px-3 py-2 text-center w-[14%]">
-                    <span className="text-[11px] font-bold uppercase tracking-wide text-white/90">
-                      Actions
-                    </span>
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-white/90">Actions</span>
                   </th>
-                 </tr>
+                </tr>
               </thead>
-
               <tbody>
                 {sorted.map(p => (
                   <tr
@@ -473,43 +456,32 @@ export default function InventoryTab({
                       ${p.stock === 0 ? 'bg-red-50' : p.stock <= 5 ? 'bg-orange-50/50' : ''}`}
                   >
                     <td className="px-3 py-2 align-middle">
-                      <span className="block truncate font-semibold text-slate-500">
-                        {p.brand || '—'}
-                      </span>
-                     </td>
+                      <span className="block truncate font-semibold text-slate-500">{p.brand || '—'}</span>
+                    </td>
                     <td className="px-3 py-2 align-middle">
-                      <span className="block truncate font-bold text-slate-800" title={p.name}>
-                        {p.name}
-                      </span>
-                     </td>
+                      <span className="block truncate font-bold text-slate-800" title={p.name}>{p.name}</span>
+                    </td>
                     <td className="px-3 py-2 align-middle">
-                      <span className="inline-block max-w-full truncate px-2 py-0.5
-                        rounded-full text-xs font-semibold bg-cyan-100 text-cyan-800">
+                      <span className="inline-block max-w-full truncate px-2 py-0.5 rounded-full text-xs font-semibold bg-cyan-100 text-cyan-800">
                         {p.type}
                       </span>
-                     </td>
+                    </td>
                     <td className="px-3 py-2 align-middle text-center">
-                      <span className="font-bold font-mono text-amber-500">
-                        Rs.{(p.buyPrice || 0).toLocaleString()}
-                      </span>
-                     </td>
+                      <span className="font-bold font-mono text-amber-500">Rs.{(p.buyPrice || 0).toLocaleString()}</span>
+                    </td>
                     <td className="px-3 py-2 align-middle text-center">
-                      <span className="font-bold font-mono text-emerald-600">
-                        Rs.{(p.retailPrice || 0).toLocaleString()}
-                      </span>
-                     </td>
+                      <span className="font-bold font-mono text-emerald-600">Rs.{(p.retailPrice || 0).toLocaleString()}</span>
+                    </td>
                     <td className="px-3 py-2 align-middle text-center">
                       <span className={`block font-extrabold font-mono ${
                         p.stock === 0 ? 'text-red-600' : p.stock <= 5 ? 'text-amber-500' : 'text-slate-800'
-                      }`}>
-                        {p.stock}
-                      </span>
+                      }`}>{p.stock}</span>
                       {p.stock <= 5 && (
                         <span className="text-[10px] font-semibold text-red-500 leading-none">
                           {p.stock === 0 ? 'Out' : 'Low'}
                         </span>
                       )}
-                     </td>
+                    </td>
                     <td className="px-3 py-2 align-middle">
                       <div className="flex gap-1 justify-center">
                         <button
@@ -534,11 +506,11 @@ export default function InventoryTab({
                           <Trash2 size={14} />
                         </button>
                       </div>
-                     </td>
-                   </tr>
+                    </td>
+                  </tr>
                 ))}
               </tbody>
-             </table>
+            </table>
           </div>
         </div>
       )}
@@ -547,8 +519,7 @@ export default function InventoryTab({
       {sorted.length > 0 && (
         <div className="mt-3 flex flex-wrap justify-between gap-2 text-sm text-slate-500 px-1">
           <span>
-            Showing{' '}
-            <strong className="text-cyan-600">{sorted.length}</strong> of{' '}
+            Showing <strong className="text-cyan-600">{sorted.length}</strong> of{' '}
             <strong>{inventory.length}</strong> products
             {activeType !== 'All' && (
               <span className="ml-1.5 px-2 py-0.5 rounded-full text-xs font-bold bg-cyan-100 text-cyan-700">

@@ -107,7 +107,7 @@ doc.text(
   doc.text('Contact Information:', ML, footerTop);
   doc.setFont('helvetica', 'normal');
   doc.text(`Phone: ${SHOP.phone}`,  ML, footerTop + 6);
-  doc.text(`Email: ${SHOP.email}`,  ML, footerTop + 12);
+  //doc.text(`Email: ${SHOP.email}`,  ML, footerTop + 12);
   doc.setFont('helvetica', 'bold');
   doc.text('Authorized By:', MR - 60, footerTop);
   doc.setDrawColor(...BORDER); doc.line(MR - 60, footerTop + 6, MR, footerTop + 6);

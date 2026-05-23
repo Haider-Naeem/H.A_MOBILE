@@ -1,7 +1,14 @@
-import { Lock } from 'lucide-react';
+import { Lock} from 'lucide-react'; // remove useEffect from here
+import { useEffect } from 'react';              // import from react
 
 export default function PinModal({ pinInput, setPinInput, onVerify, onCancel }) {
-  return (
+  // ✅ Re-activate renderer input handling when modal opens
+  useEffect(() => {
+    window.focus();
+    document.body.focus();
+  }, []);
+
+ return (
     <div className="fixed inset-0 bg-black/65 backdrop-blur-sm flex items-center justify-center z-[1000] p-4 animate-fade-in">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm animate-slide-up">
         <div className="p-6 text-center">

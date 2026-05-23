@@ -66,8 +66,9 @@ async function saveVendorToDB(name, phone, address, setSavedVendors) {
   if (data) setSavedVendors(data);
 }
 
-async function deleteVendorFromDB(vendorItem, setSavedVendors) {
-  if (!confirm('Remove this vendor from saved vendors?')) return;
+async function deleteVendorFromDB(vendorItem, setSavedVendors, confirm) {
+  const ok = await confirm('Remove this vendor from saved vendors?');
+  if (!ok) return;
   if (vendorItem.id && !String(vendorItem.id).startsWith('local_')) {
     try {
       const { error } = await supabase.from('vendors').delete().eq('id', vendorItem.id);
@@ -86,7 +87,7 @@ async function deleteVendorFromDB(vendorItem, setSavedVendors) {
   } catch (e) { alert('Error: ' + e.message); }
 }
 
-async function updateVendorInDB(vendorItem, updatedData, setSavedVendors) {
+async function updateVendorInDB(vendorItem, updatedData, setSavedVendors, alert) {
   const entry = {
     name:    updatedData.name.trim(),
     phone:   (updatedData.phone    || '').trim(),
@@ -114,15 +115,17 @@ async function updateVendorInDB(vendorItem, updatedData, setSavedVendors) {
     if (idx >= 0) existing[idx] = { ...existing[idx], ...entry };
     localStorage.setItem(LS_KEY, JSON.stringify(existing));
     setSavedVendors(existing);
-  } catch (e) { alert('Error: ' + e.message); }
+  } catch (e) { await alert('Error: ' + e.message); }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
 // OrderTab — main component
 // Props:  inventory   Product[]
 //         orders      Order[]  (realtime from parent)
+//         confirm     (message) => Promise<boolean>
+//         alert       (message) => Promise<void>
 // ══════════════════════════════════════════════════════════════════════════════
-export default function OrderTab({ inventory, orders }) {
+export default function OrderTab({ inventory, orders, confirm, alert }) {
   const [view, setView] = useState('create');
   const [showManualEntry, setShowManualEntry] = useState(false);
 
@@ -274,13 +277,13 @@ export default function OrderTab({ inventory, orders }) {
     ]);
   };
 
-  const addManualProduct = () => {
+  const addManualProduct = async () => {
     if (!manualProduct.name.trim()) {
-      alert('Please enter product name');
+      await alert('Please enter product name');
       return;
     }
     if (!manualProduct.quantity || manualProduct.quantity < 1) {
-      alert('Please enter valid quantity');
+      await alert('Please enter valid quantity');
       return;
     }
 
@@ -334,7 +337,6 @@ export default function OrderTab({ inventory, orders }) {
         vendor_address: vendorAddress.trim(),
         items:          orderItems.map(item => ({
           ...item,
-          // Ensure manual items are properly flagged in the stored order
           isManual: item.isManual || false,
           manualDetails: item.manualDetails || null
         })),
@@ -380,7 +382,7 @@ export default function OrderTab({ inventory, orders }) {
       // Reset form
       setOrderItems([]); setVendorName(''); setVendorPhone(''); setVendorAddress('');
       setFilterMode([]); setProductSearch(''); setView('history'); setShowCartModal(false);
-    } catch (err) { alert('Failed: ' + err.message); }
+    } catch (err) { await alert('Failed: ' + err.message); }
     finally { setLoading(false); }
   };
 
@@ -721,7 +723,7 @@ export default function OrderTab({ inventory, orders }) {
                 </div>
               )}
 
-              {/* Product Table */}
+              {/* Product Table - ENLARGED ROWS AND TEXT */}
               {!showProductTable ? (
                 <div className="text-center py-10 px-4 text-slate-400">
                   <Package size={44} className="mx-auto mb-2.5 opacity-20" />
@@ -735,15 +737,15 @@ export default function OrderTab({ inventory, orders }) {
                   <span className="text-xs">Adjust filters or search</span>
                 </div>
               ) : (
-                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
                   <table className="w-full border-collapse text-sm" style={{ minWidth: '300px' }}>
                     <thead className="sticky top-0 z-10">
                       <tr className="bg-gradient-to-r from-cyan-800 to-cyan-600">
-                        <th className="px-2 py-1.5 text-left   text-[10px] font-bold uppercase tracking-wide text-white w-[18%]">Brand</th>
-                        <th className="px-2 py-1.5 text-left   text-[10px] font-bold uppercase tracking-wide text-white">Product</th>
-                        <th className="px-2 py-1.5 text-center text-[10px] font-bold uppercase tracking-wide text-white w-[18%]">Type</th>
-                        <th className="px-2 py-1.5 text-center text-[10px] font-bold uppercase tracking-wide text-white w-[10%]">Stock</th>
-                        <th className="px-2 py-1.5 text-center text-[10px] font-bold uppercase tracking-wide text-white w-[14%]">Action</th>
+                        <th className="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wide text-white w-[18%]">Brand</th>
+                        <th className="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wide text-white">Product</th>
+                        <th className="px-4 py-3 text-center text-[12px] font-bold uppercase tracking-wide text-white w-[18%]">Type</th>
+                        <th className="px-4 py-3 text-center text-[12px] font-bold uppercase tracking-wide text-white w-[10%]">Stock</th>
+                        <th className="px-4 py-3 text-center text-[12px] font-bold uppercase tracking-wide text-white w-[14%]">Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -756,37 +758,37 @@ export default function OrderTab({ inventory, orders }) {
                               isAdded ? 'bg-emerald-50' : idx % 2 === 0 ? 'bg-white' : 'bg-sky-50/40'
                             } hover:bg-sky-100 transition-colors`}
                           >
-                            <td className="px-2 py-1.5">
+                            <td className="px-4 py-4 align-middle">
                               {p.brand
-                                ? <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide bg-cyan-100 text-cyan-800 whitespace-nowrap">{p.brand}</span>
-                                : <span className="text-slate-300 text-xs">—</span>
+                                ? <span className="inline-block px-2 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide bg-cyan-100 text-cyan-800 whitespace-nowrap">{p.brand}</span>
+                                : <span className="text-slate-300 text-sm">—</span>
                               }
                             </td>
-                            <td className="px-2 py-1.5">
-                              <span className="font-semibold text-[12px] leading-tight block truncate">{p.name}</span>
+                            <td className="px-4 py-4 align-middle">
+                              <span className="font-semibold text-[15px] leading-tight block">{p.name}</span>
                             </td>
-                            <td className="px-2 py-1.5 text-center">
-                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-violet-100 text-violet-700 whitespace-nowrap">
+                            <td className="px-4 py-4 text-center align-middle">
+                              <span className="inline-block px-2 py-1 rounded-full text-[11px] font-bold bg-violet-100 text-violet-700 whitespace-nowrap">
                                 {p.type || '—'}
                               </span>
                             </td>
-                            <td className="px-2 py-1.5 text-center">
-                              <span className={`font-extrabold text-[12px] font-mono ${
+                            <td className="px-4 py-4 text-center align-middle">
+                              <span className={`font-extrabold text-[16px] font-mono ${
                                 p.stock === 0 ? 'text-red-600' : p.stock <= 5 ? 'text-amber-500' : 'text-emerald-600'
                               }`}>
                                 {p.stock}
                               </span>
                             </td>
-                            <td className="px-2 py-1.5 text-center">
+                            <td className="px-4 py-4 text-center align-middle">
                               <button
-                                className={`text-[10px] px-2 py-1 rounded font-semibold flex items-center justify-center gap-0.5 mx-auto transition-all ${
+                                className={`text-[11px] px-4 py-2 rounded font-semibold flex items-center justify-center gap-1.5 mx-auto transition-all ${
                                   isAdded
                                     ? 'bg-slate-100 text-slate-500 border border-slate-300'
                                     : 'bg-gradient-to-br from-cyan-700 to-cyan-500 text-white shadow'
                                 }`}
                                 onClick={() => (isAdded ? removeFromOrder(p.id) : addToOrder(p))}
                               >
-                                {isAdded ? <><X size={10} /> Added</> : <><Plus size={10} /> Add</>}
+                                {isAdded ? <><X size={12} /> Added</> : <><Plus size={12} /> Add</>}
                               </button>
                             </td>
                           </tr>
@@ -836,7 +838,7 @@ export default function OrderTab({ inventory, orders }) {
                   </button>
                 </div>
 
-                {/* Cart items — Type always shown */}
+                {/* Cart items */}
                 <div className="flex-1 overflow-y-auto min-h-0">
                   {orderItems.length === 0 ? (
                     <div className="text-center py-12 text-slate-500 px-4">
@@ -848,51 +850,51 @@ export default function OrderTab({ inventory, orders }) {
                       <table className="w-full border-collapse" style={{ minWidth: '380px' }}>
                         <thead>
                           <tr className="bg-gradient-to-r from-cyan-800 to-cyan-600">
-                            <th className="px-3 py-2.5 text-left   text-[11px] font-bold uppercase tracking-wide text-white w-[22%]">Brand</th>
-                            <th className="px-3 py-2.5 text-left   text-[11px] font-bold uppercase tracking-wide text-white">Name</th>
-                            <th className="px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wide text-white w-[20%]">Type</th>
-                            <th className="px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wide text-white w-[15%]">Qty</th>
-                            <th className="px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wide text-white w-[8%]"></th>
+                            <th className="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wide text-white w-[22%]">Brand</th>
+                            <th className="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wide text-white">Name</th>
+                            <th className="px-4 py-3 text-center text-[12px] font-bold uppercase tracking-wide text-white w-[20%]">Type</th>
+                            <th className="px-4 py-3 text-center text-[12px] font-bold uppercase tracking-wide text-white w-[15%]">Qty</th>
+                            <th className="px-4 py-3 text-center text-[12px] font-bold uppercase tracking-wide text-white w-[8%]"></th>
                           </tr>
                         </thead>
                         <tbody>
                           {orderItems.map((item, idx) => (
                             <tr key={item.id} className={`border-b border-sky-50 ${idx % 2 === 1 ? 'bg-sky-50/50' : 'bg-white'}`}>
-                              <td className="px-3 py-3">
-                                <span className={`font-bold text-sm truncate block ${item.isManual ? 'text-emerald-600' : 'text-cyan-800'}`}>
+                              <td className="px-4 py-4 align-middle">
+                                <span className={`font-bold text-[15px] truncate block ${item.isManual ? 'text-emerald-600' : 'text-cyan-800'}`}>
                                   {item.brand || '—'}
-                                  {item.isManual && <span className="ml-1 text-[8px] bg-emerald-100 text-emerald-600 px-1 rounded">NEW</span>}
+                                  {item.isManual && <span className="ml-1 text-[9px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded">NEW</span>}
                                 </span>
                               </td>
-                              <td className="px-3 py-3">
-                                <span className="font-bold text-[14px] block truncate">{item.name}</span>
+                              <td className="px-4 py-4 align-middle">
+                                <span className="font-bold text-[15px] block truncate">{item.name}</span>
                               </td>
-                              <td className="px-3 py-3 text-center">
-                                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-violet-100 text-violet-700 whitespace-nowrap">
+                              <td className="px-4 py-4 text-center align-middle">
+                                <span className="inline-block px-2 py-1 rounded-full text-[11px] font-bold bg-violet-100 text-violet-700 whitespace-nowrap">
                                   {item.type || '—'}
                                 </span>
                               </td>
-                              <td className="px-3 py-3 text-center">
+                              <td className="px-4 py-4 text-center align-middle">
                                 <input
                                   type="text"
                                   value={item.orderQuantity ?? ''}
                                   onChange={(e) => updateQty(item.id, e.target.value)}
                                   onBlur={() => { if (!item.orderQuantity || item.orderQuantity < 1) updateQty(item.id, 1); }}
-                                  className="w-[52px] text-center border border-slate-300 rounded-md py-1.5 px-1 text-sm font-extrabold text-cyan-600 font-mono outline-none focus:border-cyan-600 focus:ring-1 focus:ring-cyan-200"
+                                  className="w-[60px] text-center border border-slate-300 rounded-md py-2 px-2 text-[15px] font-extrabold text-cyan-600 font-mono outline-none focus:border-cyan-600 focus:ring-1 focus:ring-cyan-200"
                                 />
                                </td>
-                              <td className="px-2 py-3 text-center">
+                              <td className="px-3 py-4 text-center align-middle">
                                 <button
-                                  className="text-red-500 hover:bg-red-50 p-1.5 rounded flex items-center justify-center transition-colors mx-auto"
+                                  className="text-red-500 hover:bg-red-50 p-2 rounded flex items-center justify-center transition-colors mx-auto"
                                   onClick={() => removeFromOrder(item.id)}
                                 >
-                                  <Trash2 size={15} />
+                                  <Trash2 size={16} />
                                 </button>
                                </td>
                              </tr>
                           ))}
                         </tbody>
-                       </table>
+                      </table>
                     </div>
                   )}
                 </div>
@@ -939,7 +941,10 @@ export default function OrderTab({ inventory, orders }) {
                       </button>
                       <button
                         className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-slate-100 text-slate-500 border border-slate-300 hover:bg-slate-200 transition-all text-sm"
-                        onClick={() => { if (confirm('Clear all items?')) setOrderItems([]); }}
+                        onClick={async () => {
+                          const ok = await confirm('Clear all items?');
+                          if (ok) setOrderItems([]);
+                        }}
                       >
                         <Trash2 size={14} /> Clear Cart
                       </button>
@@ -954,7 +959,7 @@ export default function OrderTab({ inventory, orders }) {
 
       {/* ════════════ ORDER HISTORY ════════════ */}
       {view === 'history' && (
-        <OrderHistory orders={orders} inventory={inventory} />
+        <OrderHistory orders={orders} inventory={inventory} confirm={confirm} alert={alert} />
       )}
 
       {/* ════════════ VENDORS MODAL ════════════ */}
@@ -969,8 +974,8 @@ export default function OrderTab({ inventory, orders }) {
         }}
         savedVendors={savedVendors}
         loadingVendors={loadingVendors}
-        onDeleteVendor={(v)          => deleteVendorFromDB(v, setSavedVendors)}
-        onUpdateVendor={(v, updated) => updateVendorInDB(v, updated, setSavedVendors)}
+        onDeleteVendor={(v)          => deleteVendorFromDB(v, setSavedVendors, confirm)}
+        onUpdateVendor={(v, updated) => updateVendorInDB(v, updated, setSavedVendors, alert)}
       />
     </div>
   );

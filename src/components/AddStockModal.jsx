@@ -1,11 +1,16 @@
 import { supabase } from '../supabase-config';
 import { X, Plus, Package } from 'lucide-react';
 
-export default function AddStockModal({ showAddStockModal, setShowAddStockModal, stockProduct, setStockProduct, stockAmount, setStockAmount }) {
+export default function AddStockModal({
+  showAddStockModal, setShowAddStockModal,
+  stockProduct, setStockProduct,
+  stockAmount, setStockAmount,
+  confirm, alert
+}) {
   const handleAddStock = async () => {
     const amount = parseInt(stockAmount);
-    if (!amount || amount <= 0) return alert('Enter a valid quantity (> 0)');
-    if (amount > 10000) return alert('Quantity seems too large. Please verify.');
+    if (!amount || amount <= 0) { await alert('Enter a valid quantity (> 0)'); return; }
+    if (amount > 10000)         { await alert('Quantity seems too large. Please verify.'); return; }
 
     try {
       const { error } = await supabase
@@ -16,7 +21,7 @@ export default function AddStockModal({ showAddStockModal, setShowAddStockModal,
       resetAndClose();
     } catch (err) {
       console.error(err);
-      alert('Failed to add stock: ' + err.message);
+      await alert('Failed to add stock: ' + err.message);
     }
   };
 
@@ -34,7 +39,6 @@ export default function AddStockModal({ showAddStockModal, setShowAddStockModal,
     <div className="fixed inset-0 bg-black/65 backdrop-blur-sm flex items-center justify-center z-[1000] p-4 animate-fade-in">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto animate-slide-up">
 
-        {/* Header */}
         <div className="flex justify-between items-center px-6 pt-5 pb-4 border-b border-sky-50">
           <div className="flex items-center gap-2 text-xl font-bold text-emerald-600">
             <Plus size={20} /> Add Stock
@@ -47,9 +51,7 @@ export default function AddStockModal({ showAddStockModal, setShowAddStockModal,
           </button>
         </div>
 
-        {/* Body */}
         <div className="px-6 py-5">
-          {/* Product Info Card */}
           <div className="bg-cyan-50 border border-cyan-300 rounded-lg p-3.5 mb-5">
             <div className="flex gap-2 items-start">
               <Package size={22} className="text-cyan-600 flex-shrink-0 mt-0.5" />
@@ -62,7 +64,6 @@ export default function AddStockModal({ showAddStockModal, setShowAddStockModal,
                 </span>
               </div>
             </div>
-
             <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-cyan-200">
               <div>
                 <div className="text-[10px] text-slate-500">Current Stock</div>
@@ -75,7 +76,6 @@ export default function AddStockModal({ showAddStockModal, setShowAddStockModal,
             </div>
           </div>
 
-          {/* Qty Input */}
           <div className="mb-4">
             <label className="block text-xs font-semibold text-slate-800 mb-1.5 uppercase tracking-wide">
               Quantity to Add <span className="text-red-500">*</span>
@@ -92,7 +92,6 @@ export default function AddStockModal({ showAddStockModal, setShowAddStockModal,
             />
           </div>
 
-          {/* Preview */}
           {stockAmount > 0 && (
             <div className="flex justify-between items-center bg-emerald-50 border border-emerald-500 rounded-lg px-3.5 py-3 mb-4">
               <div>
@@ -106,7 +105,6 @@ export default function AddStockModal({ showAddStockModal, setShowAddStockModal,
           )}
         </div>
 
-        {/* Footer */}
         <div className="flex gap-3 px-6 pb-5 pt-2 border-t border-slate-100">
           <button
             className="flex-1 py-3 rounded-lg bg-gradient-to-br from-emerald-600 to-emerald-400 text-white font-semibold text-base shadow-md hover:-translate-y-px transition-all"

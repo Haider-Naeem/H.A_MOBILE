@@ -11,6 +11,8 @@ import WhatsAppBillModal from './components/WhatsAppBillModal';
 import ReturnModal from './components/ReturnModal';
 import PinModal from './components/PinModal';
 import ChangePinModal from './components/ChangePinModal';
+import Dialog from './components/Dialog';
+import { useDialog } from './hooks/useDialog';
 
 const DEFAULT_TYPES = [
   'Screen Protector','Front Camera','Back Camera','Battery',
@@ -18,6 +20,9 @@ const DEFAULT_TYPES = [
 ];
 
 export default function App() {
+  // ── Dialog ───────────────────────────────────────────────────
+  const { dialog, confirm, alert, handleConfirm, handleCancel } = useDialog();
+
   // ── Tab / Auth ──────────────────────────────────────────────
   const [activeTab,          setActiveTab]          = useState('pos');
   const [isAdmin,            setIsAdmin]            = useState(false);
@@ -142,7 +147,7 @@ export default function App() {
     fetchInventory(); fetchSales(); fetchOrders(); fetchAdminPin();
   }, [fetchInventory, fetchSales, fetchOrders, fetchAdminPin]);
 
-  // ── Realtime ──────────────────────────────────────────────────
+  // ── Realtime ─────────────────────────────────────────────────
   useEffect(() => {
     const invChannel = supabase.channel('inventory-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory' }, fetchInventory)
@@ -184,24 +189,34 @@ export default function App() {
     }
   };
 
-  const verifyPin = () => {
+  // ✅ No more native alert() — uses custom dialog
+  const verifyPin = async () => {
     if (pinInput === adminPin) {
       setIsAdmin(true); setActiveTab(requestedTab);
       setShowPinModal(false); setPinInput(''); setRequestedTab(null);
     } else {
-      alert('Incorrect PIN'); setPinInput('');
+      setShowPinModal(false);
+      await alert('Incorrect PIN. Please try again.');
+      setShowPinModal(true);
+      setPinInput('');
     }
   };
 
   const handleChangePin = async (oldPin, newPin) => {
-    if (oldPin !== adminPin) { alert('Incorrect current PIN'); return false; }
+    if (oldPin !== adminPin) {
+      await alert('Incorrect current PIN.');
+      return false;
+    }
     try {
       const { error } = await supabase.from('settings')
         .upsert({ id: 'adminPin', value: newPin });
       if (error) throw error;
-      setAdminPin(newPin); alert('PIN changed successfully!'); return true;
+      setAdminPin(newPin);
+      await alert('PIN changed successfully!');
+      return true;
     } catch (err) {
-      alert('Failed to change PIN: ' + err.message); return false;
+      await alert('Failed to change PIN: ' + err.message);
+      return false;
     }
   };
 
@@ -237,6 +252,8 @@ export default function App() {
             setShowReturnModal={setShowReturnModal}
             returnSearch={returnSearch} setReturnSearch={setReturnSearch}
             sales={sales}
+            confirm={confirm}
+            alert={alert}
           />
         )}
 
@@ -252,6 +269,8 @@ export default function App() {
             stockProduct={stockProduct} setStockProduct={setStockProduct}
             stockAmount={stockAmount} setStockAmount={setStockAmount}
             stats={stats} blurredCards={blurredCards} toggleBlur={toggleBlur}
+            confirm={confirm}
+            alert={alert}
           />
         )}
 
@@ -263,6 +282,8 @@ export default function App() {
             customEndDate={customEndDate} setCustomEndDate={setCustomEndDate}
             stats={stats} blurredCards={blurredCards} toggleBlur={toggleBlur}
             onSendBill={(receipt) => { setLastReceipt(receipt); setShowReceipt(true); }}
+            confirm={confirm}
+            alert={alert}
           />
         )}
 
@@ -270,6 +291,8 @@ export default function App() {
           <OrderTab
             inventory={inventory}
             orders={orders}
+            confirm={confirm}
+            alert={alert}
           />
         )}
 
@@ -283,6 +306,8 @@ export default function App() {
           editingProduct={editingProduct} setEditingProduct={setEditingProduct}
           form={form} setForm={setForm}
           productTypes={productTypes} setProductTypes={setProductTypes}
+          confirm={confirm}
+          alert={alert}
         />
       )}
       {showAddStockModal && (
@@ -291,6 +316,8 @@ export default function App() {
           setShowAddStockModal={setShowAddStockModal}
           stockProduct={stockProduct} setStockProduct={setStockProduct}
           stockAmount={stockAmount} setStockAmount={setStockAmount}
+          confirm={confirm}
+          alert={alert}
         />
       )}
       {showReceipt && lastReceipt && (
@@ -305,6 +332,8 @@ export default function App() {
           setShowReturnModal={setShowReturnModal}
           returnSearch={returnSearch} setReturnSearch={setReturnSearch}
           sales={sales} inventory={inventory}
+          confirm={confirm}
+          alert={alert}
         />
       )}
       {showPinModal && (
@@ -318,6 +347,16 @@ export default function App() {
         <ChangePinModal
           onClose={() => setShowChangePinModal(false)}
           onChangePin={handleChangePin}
+        />
+      )}
+
+      {/* ── Global Dialog — always on top ── */}
+      {dialog && (
+        <Dialog
+          type={dialog.type}
+          message={dialog.message}
+          onConfirm={handleConfirm}
+          onCancel={handleCancel}
         />
       )}
     </div>

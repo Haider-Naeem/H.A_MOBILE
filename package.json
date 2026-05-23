@@ -1,13 +1,22 @@
 {
   "name": "adnan_mobilerepair_shop",
   "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "main": "electron/main.js",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host --port 5173",
+    "electron": "electron .",
+    "electron-dev": "set NODE_OPTIONS=--max-old-space-size=4096 && concurrently -k \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
+    "electron-dev:clean": "rimraf dist && npm run electron-dev",
     "build": "vite build",
+    "build:clean": "rimraf dist release && npm run build",
+    "dist": "npm run build:clean && electron-builder",
+    "dist:win": "npm run build:clean && electron-builder --win",
+    "preview": "vite preview",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "lint:fix": "eslint . --fix",
+    "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.1",
@@ -25,13 +34,60 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
     "concurrently": "^9.2.1",
-    "electron": "^42.2.0",
+    "electron": "^36.9.5",
     "electron-builder": "^26.8.1",
+    "electron-rebuild": "^3.2.9",
     "eslint": "^10.2.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.5.0",
+    "rimraf": "^5.0.5",
     "vite": "^8.0.10",
     "wait-on": "^9.0.10"
+  },
+  "build": {
+    "appId": "com.hamobile.app",
+    "productName": "HA MOBILE",
+    "copyright": "Copyright © 2026 HA MOBILE",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "!electron/splash.html",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "electron/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "HA MOBILE",
+      "artifactName": "HA-MOBILE-Setup-${version}.${ext}",
+      "deleteAppDataOnUninstall": true,
+      "runAfterFinish": true
+    },
+    "extraResources": [
+      {
+        "from": "electron/icon.ico",
+        "to": "icon.ico"
+      }
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "**/*.node"
+    ]
   }
 }

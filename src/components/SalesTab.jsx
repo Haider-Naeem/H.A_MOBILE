@@ -9,7 +9,8 @@ export default function SalesTab({
   customStartDate, setCustomStartDate,
   customEndDate,   setCustomEndDate,
   stats, blurredCards, toggleBlur,
-  onSendBill
+  onSendBill,
+  confirm, alert,
 }) {
   const itemProfit = (item) => {
     const retQty = item.returnedQuantity || 0;
@@ -45,7 +46,6 @@ export default function SalesTab({
   const profit     = filtered.reduce((s, sale) =>
     s + sale.items.filter(i => !i.isRepair).reduce((a, i) => a + itemProfit(i), 0), 0);
 
-  // ── FIX: only count repair items that haven't been fully returned ──────────
   const serviceFees = filtered.reduce((s, sale) =>
     s + sale.items
       .filter(i => i.isRepair && (i.returnedQuantity || 0) < (i.quantity || 1))
@@ -54,17 +54,18 @@ export default function SalesTab({
   const getLabel = () =>
     ({ daily: 'Today', weekly: 'This Week', monthly: 'This Month', custom: 'Custom Range' }[salesFilter] || 'All Time');
 
-  // ── Per-sale delete (with optional stock restore) ─────────────────────────
+  // ── Per-sale delete ───────────────────────────────────────────────────────
   const deleteSale = async (sale) => {
     const custName = sale.customer_name || sale.customerName || 'Walk-in Customer';
     const total    = sale.total.toFixed(0);
 
-    if (!window.confirm(
+    const confirmed = await confirm(
       `Delete this sale?\n\nCustomer: ${custName}\nTotal: Rs.${total}\n\nThis cannot be undone.`
-    )) return;
+    );
+    if (!confirmed) return;
 
-    const restore = window.confirm(
-      'Restore inventory stock?\n\nOK → restock products back to inventory\nCancel → delete without restocking'
+    const restore = await confirm(
+      'Restore inventory stock?\n\nConfirm → restock products back to inventory\nCancel → delete without restocking'
     );
 
     try {
@@ -91,9 +92,9 @@ export default function SalesTab({
       const { error } = await supabase.from('sales').delete().eq('id', sale.id);
       if (error) throw error;
 
-      alert(`✓ Sale deleted${restore ? ' and stock restored' : ''}.`);
+      await alert(`✓ Sale deleted${restore ? ' and stock restored' : ''}.`);
     } catch (err) {
-      alert('Error: ' + err.message);
+      await alert('Error: ' + err.message);
     }
   };
 
@@ -147,8 +148,8 @@ export default function SalesTab({
   };
 
   // ── PDF Export ────────────────────────────────────────────────────────────
-  const exportPDF = () => {
-    if (!filtered.length) return alert('No sales to export');
+  const exportPDF = async () => {
+    if (!filtered.length) { await alert('No sales to export'); return; }
 
     const doc   = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pageW = doc.internal.pageSize.getWidth();
@@ -345,20 +346,37 @@ export default function SalesTab({
     doc.save(`Adnan_Sales_${salesFilter}_${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
+  // ── Delete period ─────────────────────────────────────────────────────────
   const deletePeriod = async () => {
-    if (!filtered.length) return alert('No sales in this period');
-    if (salesFilter !== 'custom') return alert("Select 'Custom Range' to specify period for deletion.");
-    if (!customStartDate || !customEndDate) return alert('Select both start and end dates');
-    const msg = `⚠️ PERMANENT DELETION\n\nDelete ${filtered.length} sales from:\n${customStartDate} to ${customEndDate}\n\nRevenue: Rs.${revenue.toFixed(0)}\nProfit: Rs.${profit.toFixed(0)}\n\nType DELETE to confirm:`;
-    if (prompt(msg) !== 'DELETE') return alert('Cancelled');
-    if (!confirm(`Final confirmation: Delete ${filtered.length} sales? CANNOT be undone.`)) return;
+    if (!filtered.length) { await alert('No sales in this period'); return; }
+    if (salesFilter !== 'custom') {
+      await alert("Select 'Custom Range' to specify a period for deletion.");
+      return;
+    }
+    if (!customStartDate || !customEndDate) {
+      await alert('Select both start and end dates');
+      return;
+    }
+
+    const firstConfirm = await confirm(
+      `⚠️ PERMANENT DELETION\n\nDelete ${filtered.length} sales from:\n${customStartDate} to ${customEndDate}\n\nRevenue: Rs.${revenue.toFixed(0)}\nProfit: Rs.${profit.toFixed(0)}\n\nThis cannot be undone.`
+    );
+    if (!firstConfirm) return;
+
+    const finalConfirm = await confirm(
+      `Final confirmation: Delete ${filtered.length} sales?\n\nThis CANNOT be undone.`
+    );
+    if (!finalConfirm) return;
+
     try {
       for (const sale of filtered) {
         const { error } = await supabase.from('sales').delete().eq('id', sale.id);
         if (error) throw error;
       }
-      alert(`Deleted ${filtered.length} records.`);
-    } catch (err) { alert('Error: ' + err.message); }
+      await alert(`✓ Deleted ${filtered.length} records.`);
+    } catch (err) {
+      await alert('Error: ' + err.message);
+    }
   };
 
   const buildReceipt = (sale) => ({
@@ -463,7 +481,6 @@ export default function SalesTab({
           const receiptNo    = sale.receipt_no || sale.receiptNo;
           const custName     = sale.customer_name || sale.customerName || 'Walk-in Customer';
           const custMob      = sale.customer_mobile || sale.customerMobile;
-          // Only show repair if not fully returned
           const activeRepair = repairItem && (repairItem.returnedQuantity || 0) < (repairItem.quantity || 1);
 
           return (
@@ -471,7 +488,6 @@ export default function SalesTab({
 
               {/* ── Card Header ─────────────────────────────────────────── */}
               <div className="px-4 sm:px-5 pt-4 sm:pt-5 pb-3">
-                {/* Top row: name/meta  ↔  total/profit */}
                 <div className="flex justify-between items-start gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="text-xl sm:text-2xl font-bold text-cyan-800 mb-1 truncate">{custName}</div>
@@ -497,7 +513,6 @@ export default function SalesTab({
                   </div>
                 </div>
 
-                {/* Button row — full-width on mobile, right-aligned on desktop */}
                 <div className="flex gap-2 mt-3 sm:justify-end">
                   <button
                     className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg bg-gradient-to-br from-red-700 to-red-500 text-white text-sm font-semibold shadow hover:-translate-y-px transition-all"
@@ -566,7 +581,7 @@ export default function SalesTab({
                 </div>
               )}
 
-              {/* ── Repair row (only if not fully returned) ──────────────── */}
+              {/* ── Repair row ───────────────────────────────────────────── */}
               {activeRepair && (
                 <div className="flex flex-wrap justify-between items-center gap-2 mx-4 mb-3 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg">
                   <div className="flex items-center gap-2">

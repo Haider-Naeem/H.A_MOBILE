@@ -5,33 +5,23 @@ import { useState, useEffect } from 'react';
 export default function AddProductModal({
   showAddProductModal, setShowAddProductModal,
   editingProduct, setEditingProduct,
-  form, setForm, productTypes, setProductTypes
+  form, setForm, productTypes, setProductTypes,
+  confirm, alert
 }) {
   const [saving, setSaving] = useState(false);
 
-  // Load custom types from Supabase on mount
   useEffect(() => {
-    if (showAddProductModal) {
-      loadCustomTypes();
-    }
+    if (showAddProductModal) loadCustomTypes();
   }, [showAddProductModal]);
 
   const loadCustomTypes = async () => {
     try {
-      // Fetch distinct types from inventory
       const { data, error } = await supabase
-        .from('inventory')
-        .select('type')
-        .not('type', 'is', null);
-      
+        .from('inventory').select('type').not('type', 'is', null);
       if (error) throw error;
-      
-      // Get unique types
       const types = [...new Set(data.map(item => item.type))];
-      const defaultTypes = ['Screen Protector', 'Phone Case', 'Charger', 'Cable', 'Headphone', 'Other'];
-      const allTypes = [...new Set([...defaultTypes, ...types])].sort();
-      
-      setProductTypes(allTypes);
+      const defaultTypes = ['Screen Protector','Phone Case','Charger','Cable','Headphone','Other'];
+      setProductTypes([...new Set([...defaultTypes, ...types])].sort());
     } catch (err) {
       console.error('Error loading types:', err);
     }
@@ -39,21 +29,11 @@ export default function AddProductModal({
 
   const saveCustomType = async (typeName) => {
     try {
-      // Save custom type to a separate table or just rely on inventory
-      // For now, we'll just ensure it's in the productTypes list
       if (!productTypes.includes(typeName)) {
-        const updatedTypes = [...productTypes, typeName].sort();
-        setProductTypes(updatedTypes);
-        
-        // Optional: Save to a custom_types table for persistence
+        setProductTypes([...productTypes, typeName].sort());
         const { error } = await supabase
-          .from('custom_types')
-          .insert([{ type_name: typeName }])
-          .select();
-        
-        if (error && error.code !== '23505') { // Ignore duplicate error
-          console.error('Error saving custom type:', error);
-        }
+          .from('custom_types').insert([{ type_name: typeName }]).select();
+        if (error && error.code !== '23505') console.error('Error saving custom type:', error);
       }
     } catch (err) {
       console.error('Error saving custom type:', err);
@@ -61,22 +41,22 @@ export default function AddProductModal({
   };
 
   const handleSave = async () => {
-    if (!form.brand.trim())      return alert('Brand name is required');
-    if (!form.name.trim())       return alert('Product name is required');
-    if (!form.buyPrice || parseFloat(form.buyPrice) <= 0) return alert('Valid buy price required');
-    if (!form.retailPrice || parseFloat(form.retailPrice) <= 0) return alert('Valid retail price required');
-    if (form.stock === '' || parseInt(form.stock) < 0) return alert('Valid stock quantity required');
+    if (!form.brand.trim())      { await alert('Brand name is required'); return; }
+    if (!form.name.trim())       { await alert('Product name is required'); return; }
+    if (!form.buyPrice || parseFloat(form.buyPrice) <= 0) { await alert('Valid buy price required'); return; }
+    if (!form.retailPrice || parseFloat(form.retailPrice) <= 0) { await alert('Valid retail price required'); return; }
+    if (form.stock === '' || parseInt(form.stock) < 0) { await alert('Valid stock quantity required'); return; }
 
     setSaving(true);
-    
+
     let finalType = form.type;
     if (form.type === 'Other') {
       if (!form.customType.trim()) {
         setSaving(false);
-        return alert('Please enter a custom type name');
+        await alert('Please enter a custom type name');
+        return;
       }
       finalType = form.customType.trim();
-      // Save custom type to Supabase
       await saveCustomType(finalType);
     }
 
@@ -93,32 +73,27 @@ export default function AddProductModal({
     try {
       if (editingProduct) {
         const { error } = await supabase
-          .from('inventory')
-          .update(data)
-          .eq('id', editingProduct.id);
+          .from('inventory').update(data).eq('id', editingProduct.id);
         if (error) throw error;
-        alert('Product updated successfully!');
+        await alert('Product updated successfully!');
       } else {
         const { error } = await supabase
-          .from('inventory')
-          .insert([{ ...data, created_at: new Date().toISOString() }]);
+          .from('inventory').insert([{ ...data, created_at: new Date().toISOString() }]);
         if (error) throw error;
-        alert('Product added successfully!');
+        await alert('Product added successfully!');
       }
-      
-      // Reload custom types after save
       await loadCustomTypes();
       resetAndClose();
     } catch (err) {
       console.error(err);
-      alert('Error saving product: ' + err.message);
+      await alert('Error saving product: ' + err.message);
     } finally {
       setSaving(false);
     }
   };
 
   const resetAndClose = () => {
-    setForm({ brand: '', name: '', type: 'Screen Protector', customType: '', buyPrice: '', retailPrice: '', stock: '' });
+    setForm({ brand:'', name:'', type:'Screen Protector', customType:'', buyPrice:'', retailPrice:'', stock:'' });
     setEditingProduct(null);
     setShowAddProductModal(false);
   };
@@ -133,7 +108,6 @@ export default function AddProductModal({
     <div className="fixed inset-0 bg-black/65 backdrop-blur-sm flex items-center justify-center z-[1000] p-4 animate-fade-in">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-slide-up">
 
-        {/* Header */}
         <div className="flex justify-between items-center px-6 pt-5 pb-4 border-b border-sky-50">
           <div className="text-xl font-bold text-slate-800">
             {editingProduct ? '✏️ Edit Product' : '➕ Add New Product'}
@@ -146,7 +120,6 @@ export default function AddProductModal({
           </button>
         </div>
 
-        {/* Body */}
         <div className="px-6 py-5">
           <div className="grid grid-cols-2 gap-3 mb-4">
             <div>
@@ -183,11 +156,7 @@ export default function AddProductModal({
               value={form.type}
               onChange={e => setForm({ ...form, type: e.target.value })}
             >
-              {productTypes.map(t => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
+              {productTypes.map(t => <option key={t} value={t}>{t}</option>)}
               <option value="Other">➕ Other (Custom)</option>
             </select>
           </div>
@@ -262,7 +231,6 @@ export default function AddProductModal({
           </div>
         </div>
 
-        {/* Footer */}
         <div className="flex gap-3 px-6 pb-5 pt-2 border-t border-slate-100">
           <button
             className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-gradient-to-br from-cyan-700 to-cyan-500 text-white font-semibold shadow-md hover:-translate-y-px transition-all disabled:opacity-50"
@@ -270,10 +238,7 @@ export default function AddProductModal({
             disabled={saving}
           >
             {saving ? (
-              <>
-                <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                Saving...
-              </>
+              <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />Saving...</>
             ) : (
               editingProduct ? '💾 Update Product' : '✓ Add Product'
             )}

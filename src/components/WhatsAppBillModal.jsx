@@ -50,7 +50,7 @@ function generateInvoicePDF(receipt, returnBlob = false) {
   if (custMob) doc.text(custMob, ML, y);
   doc.text(SHOP.phone, MR, y, { align: 'right' }); y += 6;
   doc.text(SHOP.address, MR, y, { align: 'right' }); y += 6;
-  doc.text(SHOP.email, MR, y, { align: 'right' }); y += 12;
+  //doc.text(SHOP.email, MR, y, { align: 'right' }); y += 12;
   doc.text(`Date: ${dateStr}`, ML, y); y += 10;
 
   const COL = { brand: { x: ML, w: 30 }, name: { x: ML+30, w: 55 }, type: { x: ML+85, w: 30 }, qty: { x: ML+115, w: 20 }, price: { x: ML+135, w: 25 }, total: { x: ML+160, w: 20 } };
