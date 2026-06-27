@@ -46,6 +46,21 @@ export default function InventoryTab({
     return 0;
   });
 
+  // ── Filter-aware stats ──────────────────────────────────────────────────────
+  // When a type filter is active, stats reflect only that type's products.
+  // Search term is intentionally excluded so the cards show the full-type totals,
+  // matching user expectation ("I filtered to Screens → show Screen totals").
+  const statsBase = activeType === 'All'
+    ? inventory
+    : inventory.filter(p => p.type === activeType);
+
+  const filteredStats = {
+    count:       statsBase.length,
+    invCost:     statsBase.reduce((s, p) => s + (p.buyPrice    || 0) * (p.stock || 0), 0),
+    retailValue: statsBase.reduce((s, p) => s + (p.retailPrice || 0) * (p.stock || 0), 0),
+  };
+  // ───────────────────────────────────────────────────────────────────────────
+
   const handleSort = (field) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortField(field); setSortDir('asc'); }
@@ -65,7 +80,6 @@ export default function InventoryTab({
     setShowAddProductModal(true);
   };
 
-  // ✅ Replaced native confirm/alert with custom dialog
   const handleDelete = async (id, name) => {
     const ok = await confirm(`Delete "${name}" permanently?\nThis cannot be undone.`);
     if (!ok) return;
@@ -181,7 +195,6 @@ export default function InventoryTab({
       doc.save(`inventory-${now.toISOString().slice(0, 10)}.pdf`);
     } catch (err) {
       console.error(err);
-      // ✅ Replaced native alert
       await alert('PDF export failed.\n\nMake sure the packages are installed:\nnpm i jspdf jspdf-autotable');
     } finally {
       setExporting(false);
@@ -272,19 +285,24 @@ export default function InventoryTab({
 
   return (
     <div>
-      {/* Stats */}
+      {/* Stats — scoped to active type filter (search term excluded intentionally) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
-        <StatsCard title="Total Products" value={inventory.length} icon={Package} color="blue" />
         <StatsCard
-          title="Inventory Cost"
-          value={stats.inventoryCost}
+          title={activeType === 'All' ? 'Total Products' : `${activeType} Products`}
+          value={filteredStats.count}
+          icon={Package}
+          color="blue"
+        />
+        <StatsCard
+          title={activeType === 'All' ? 'Inventory Cost' : `${activeType} Cost`}
+          value={filteredStats.invCost}
           blurred={blurredCards.has('invCost')}
           onToggleBlur={() => toggleBlur('invCost')}
           isCurrency color="teal"
         />
         <StatsCard
-          title="Retail Value"
-          value={stats.retailValue}
+          title={activeType === 'All' ? 'Retail Value' : `${activeType} Retail`}
+          value={filteredStats.retailValue}
           blurred={blurredCards.has('retailValue')}
           onToggleBlur={() => toggleBlur('retailValue')}
           isCurrency color="green"
