@@ -173,9 +173,9 @@ export default function SalesTab({
     let y    = 34;
     const bW = (pageW - 30) / 3;
     [
-      { label: 'Total Sales',   val: String(filtered.length),                         color: [15, 118, 110] },
-      { label: 'Total Revenue', val: `Rs.${Math.round(revenue).toLocaleString()}`,    color: [14, 116, 144] },
-      { label: 'Total Profit',  val: `Rs.${Math.round(profit).toLocaleString()}`,     color: [5,  150, 105] },
+      { label: 'Total Sales',   val: String(filtered.length),                      color: [15, 118, 110] },
+      { label: 'Total Revenue', val: `Rs.${Math.round(revenue).toLocaleString()}`, color: [14, 116, 144] },
+      { label: 'Total Profit',  val: `Rs.${Math.round(profit).toLocaleString()}`,  color: [5,  150, 105] },
     ].forEach((b, i) => {
       const x = 10 + i * (bW + 5);
       doc.setFillColor(...b.color);
@@ -398,7 +398,7 @@ export default function SalesTab({
   return (
     <div>
       {/* Stats — 2×2 on mobile, 4-col on sm+ */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-5">
         <StatsCard title="Total Sales"    value={filtered.length} icon={TrendingUp} color="teal" />
         <StatsCard
           title={`Revenue (${getLabel()})`} value={revenue} isCurrency color="blue"
@@ -488,25 +488,25 @@ export default function SalesTab({
 
               {/* ── Card Header ─────────────────────────────────────────── */}
               <div className="px-4 sm:px-5 pt-4 sm:pt-5 pb-3">
-                <div className="flex justify-between items-start gap-3">
+                <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-2 sm:gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="text-xl sm:text-2xl font-bold text-cyan-800 mb-1 truncate">{custName}</div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500 mt-1">
+                    <div className="text-lg sm:text-2xl font-bold text-cyan-800 mb-0.5 truncate">{custName}</div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs sm:text-sm text-slate-500 mt-0.5">
                       {custMob && custMob !== 'N/A' && (
                         <span><span className="text-slate-400 font-semibold">📱 </span><span className="font-semibold">{custMob}</span></span>
                       )}
                       <span><span className="text-slate-400 font-semibold">📅 </span><span className="font-semibold">{formatDate(sale.timestamp)}</span></span>
                       <span><span className="text-slate-400 font-semibold">⏰ </span><span className="font-semibold">{formatTime(sale.timestamp)}</span></span>
                     </div>
-                    <div className="mt-1.5 text-sm">
+                    <div className="mt-1 text-xs sm:text-sm">
                       <span className="text-slate-400 font-semibold">🧾 </span>
                       <span className="font-bold font-mono text-cyan-600">{receiptNo}</span>
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
-                    <div className="text-3xl sm:text-4xl font-bold text-cyan-800 font-mono">Rs.{sale.total.toFixed(0)}</div>
-                    <div className="text-base font-bold text-emerald-600">Profit: Rs.{sp.toFixed(0)}</div>
-                    <div className="text-sm text-slate-400">
+                  <div className="flex flex-row sm:flex-col justify-between items-baseline sm:items-end gap-1 flex-shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-cyan-200/60">
+                    <div className="text-xl sm:text-4xl font-bold text-cyan-800 font-mono">Rs.{sale.total.toFixed(0)}</div>
+                    <div className="text-xs sm:text-base font-bold text-emerald-600">Profit: Rs.{sp.toFixed(0)}</div>
+                    <div className="text-[11px] sm:text-sm text-slate-400">
                       {activeQty} item{activeQty !== 1 ? 's' : ''}
                       {activeRepair && <span className="text-amber-600"> + repair</span>}
                     </div>

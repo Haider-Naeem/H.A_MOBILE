@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, Plus, Edit2, Trash2, Package, ArrowUpDown, X, FileDown } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, Package, ArrowUpDown, X, FileDown, PackageX } from 'lucide-react';
 import { supabase } from '../supabase-config';
 import StatsCard from './StatsCard';
 
@@ -8,6 +8,9 @@ export default function InventoryTab({
   setShowAddProductModal, setEditingProduct,
   form, setForm, productTypes,
   setShowAddStockModal, setStockProduct, setStockAmount,
+  damagedStock = [],
+  onOpenDamagedModal,
+  onOpenDamagedHistory,
   stats, blurredCards, toggleBlur,
   confirm, alert,   // ✅ custom dialog props
 }) {
@@ -59,6 +62,13 @@ export default function InventoryTab({
     invCost:     statsBase.reduce((s, p) => s + (p.buyPrice    || 0) * (p.stock || 0), 0),
     retailValue: statsBase.reduce((s, p) => s + (p.retailPrice || 0) * (p.stock || 0), 0),
   };
+
+  const filteredDamaged = activeType === 'All'
+    ? damagedStock
+    : damagedStock.filter(d => d.type === activeType);
+
+  const damagedUnits = filteredDamaged.reduce((s, d) => s + (Number(d.quantity) || 0), 0);
+  const damagedLoss  = filteredDamaged.reduce((s, d) => s + (Number(d.total_loss) || (Number(d.buy_price) * Number(d.quantity)) || 0), 0);
   // ───────────────────────────────────────────────────────────────────────────
 
   const handleSort = (field) => {
@@ -126,7 +136,7 @@ export default function InventoryTab({
       const lowCount   = sorted.filter(p => p.stock <= 5).length;
       doc.setFont('helvetica', 'bold');
       doc.text(
-        `Products: ${sorted.length}   Total Units: ${totalUnits}   Low / Out of Stock: ${lowCount}`,
+        `Products: ${sorted.length}   Active Units: ${totalUnits}   Low/Out: ${lowCount}   Damaged: ${damagedUnits} (Loss: Rs.${damagedLoss.toLocaleString()})`,
         10, 30,
       );
 
@@ -230,18 +240,28 @@ export default function InventoryTab({
         <div className="flex gap-1">
           <button
             className="p-2 rounded-md text-emerald-600 hover:bg-emerald-50 transition-colors"
+            title="Add Stock"
             onClick={() => { setStockProduct(product); setStockAmount(''); setShowAddStockModal(true); }}
           >
             <Plus size={16} />
           </button>
           <button
+            className="p-2 rounded-md text-rose-600 hover:bg-rose-50 transition-colors"
+            title="Mark Damaged Stock"
+            onClick={() => onOpenDamagedModal && onOpenDamagedModal(product)}
+          >
+            <PackageX size={16} />
+          </button>
+          <button
             className="p-2 rounded-md text-cyan-600 hover:bg-cyan-50 transition-colors"
+            title="Edit"
             onClick={() => openEdit(product)}
           >
             <Edit2 size={16} />
           </button>
           <button
             className="p-2 rounded-md text-red-500 hover:bg-red-50 transition-colors"
+            title="Delete"
             onClick={() => handleDelete(product.id, product.name)}
           >
             <Trash2 size={16} />
@@ -285,8 +305,8 @@ export default function InventoryTab({
 
   return (
     <div>
-      {/* Stats — scoped to active type filter (search term excluded intentionally) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
+      {/* Stats — 4 responsive cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-5">
         <StatsCard
           title={activeType === 'All' ? 'Total Products' : `${activeType} Products`}
           value={filteredStats.count}
@@ -307,9 +327,19 @@ export default function InventoryTab({
           onToggleBlur={() => toggleBlur('retailValue')}
           isCurrency color="green"
         />
+        <StatsCard
+          title={activeType === 'All' ? 'Damaged Loss' : `${activeType} Loss`}
+          value={damagedLoss}
+          subtitle={`${damagedUnits} ${damagedUnits === 1 ? 'unit' : 'units'} · Click for history`}
+          blurred={blurredCards.has('damagedLoss')}
+          onToggleBlur={() => toggleBlur('damagedLoss')}
+          onClick={() => onOpenDamagedHistory && onOpenDamagedHistory()}
+          isCurrency color="red"
+          icon={PackageX}
+        />
       </div>
 
-      {/* Search + Export + Add */}
+      {/* Search + Export + Damaged History + Add */}
       <div className="bg-white rounded-xl border border-sky-200 shadow-sm mb-4">
         <div className="px-4 sm:px-5 py-3.5 flex flex-col gap-3">
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:items-center">
@@ -326,6 +356,27 @@ export default function InventoryTab({
                 onChange={e => setSearchTerm(e.target.value)}
               />
             </div>
+
+            <button
+              onClick={() => onOpenDamagedModal && onOpenDamagedModal(null)}
+              className="flex items-center justify-center gap-1.5 w-full sm:w-auto
+                px-3.5 py-2.5 rounded-lg border border-rose-300 text-rose-700 bg-rose-50 text-sm font-semibold
+                hover:bg-rose-100 active:scale-95 transition-all whitespace-nowrap shadow-xs"
+              title="Record Damaged Stock in Cart Mode"
+            >
+              <PackageX size={15} />
+              <span>Record Damaged</span>
+            </button>
+
+            <button
+              onClick={() => onOpenDamagedHistory && onOpenDamagedHistory()}
+              className="flex items-center justify-center gap-1.5 w-full sm:w-auto
+                px-3 py-2.5 rounded-lg border border-slate-300 text-slate-700 bg-white text-sm font-semibold
+                hover:bg-slate-50 active:scale-95 transition-all whitespace-nowrap"
+              title="View Damaged Stock History & Restore"
+            >
+              <span>History ({damagedUnits})</span>
+            </button>
 
             <button
               onClick={exportPDF}
@@ -508,6 +559,13 @@ export default function InventoryTab({
                           onClick={() => { setStockProduct(p); setStockAmount(''); setShowAddStockModal(true); }}
                         >
                           <Plus size={14} />
+                        </button>
+                        <button
+                          className="p-1.5 rounded-md text-rose-600 hover:bg-rose-50 transition-colors"
+                          title="Mark Damaged Stock"
+                          onClick={() => onOpenDamagedModal && onOpenDamagedModal(p)}
+                        >
+                          <PackageX size={14} />
                         </button>
                         <button
                           className="p-1.5 rounded-md text-cyan-600 hover:bg-cyan-50 transition-colors"

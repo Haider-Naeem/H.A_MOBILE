@@ -7,6 +7,8 @@ import SalesTab from './components/SalesTab';
 import OrderTab from './components/OrderTab';
 import AddProductModal from './components/AddProductModal';
 import AddStockModal from './components/AddStockModal';
+import DamagedStockModal from './components/DamagedStockModal';
+import DamagedHistoryModal from './components/DamagedHistoryModal';
 import WhatsAppBillModal from './components/WhatsAppBillModal';
 import ReturnModal from './components/ReturnModal';
 import PinModal from './components/PinModal';
@@ -15,8 +17,8 @@ import Dialog from './components/Dialog';
 import { useDialog } from './hooks/useDialog';
 
 const DEFAULT_TYPES = [
-  'Screen Protector','Front Camera','Back Camera','Battery',
-  'Charger','Cable','Earphones','Power Bank','Phone Cover'
+  'Screen Protector', 'Front Camera', 'Back Camera', 'Battery',
+  'Charger', 'Cable', 'Earphones', 'Power Bank', 'Phone Cover'
 ];
 
 export default function App() {
@@ -24,47 +26,51 @@ export default function App() {
   const { dialog, confirm, alert, handleConfirm, handleCancel } = useDialog();
 
   // ── Tab / Auth ──────────────────────────────────────────────
-  const [activeTab,          setActiveTab]          = useState('pos');
-  const [isAdmin,            setIsAdmin]            = useState(false);
-  const [showPinModal,       setShowPinModal]       = useState(false);
+  const [activeTab, setActiveTab] = useState('pos');
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
   const [showChangePinModal, setShowChangePinModal] = useState(false);
-  const [pinInput,           setPinInput]           = useState('');
-  const [requestedTab,       setRequestedTab]       = useState(null);
-  const [adminPin,           setAdminPin]           = useState('1234');
+  const [pinInput, setPinInput] = useState('');
+  const [requestedTab, setRequestedTab] = useState(null);
+  const [adminPin, setAdminPin] = useState('1234');
 
   // ── Data ─────────────────────────────────────────────────────
-  const [inventory,    setInventory]    = useState([]);
-  const [sales,        setSales]        = useState([]);
-  const [orders,       setOrders]       = useState([]);
+  const [inventory, setInventory] = useState([]);
+  const [sales, setSales] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [damagedStock, setDamagedStock] = useState([]);
   const [productTypes, setProductTypes] = useState(DEFAULT_TYPES);
 
   // ── Modals ───────────────────────────────────────────────────
   const [showAddProductModal, setShowAddProductModal] = useState(false);
-  const [showAddStockModal,   setShowAddStockModal]   = useState(false);
-  const [showReceipt,         setShowReceipt]         = useState(false);
-  const [showReturnModal,     setShowReturnModal]     = useState(false);
+  const [showAddStockModal, setShowAddStockModal] = useState(false);
+  const [showDamagedModal, setShowDamagedModal] = useState(false);
+  const [showDamagedHistory, setShowDamagedHistory] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [showReturnModal, setShowReturnModal] = useState(false);
 
   // ── Form / Product ───────────────────────────────────────────
   const [editingProduct, setEditingProduct] = useState(null);
   const [form, setForm] = useState({
-    name:'', brand:'', type:'Screen Protector', customType:'',
-    buyPrice:'', retailPrice:'', stock:''
+    name: '', brand: '', type: 'Screen Protector', customType: '',
+    buyPrice: '', retailPrice: '', stock: ''
   });
   const [stockProduct, setStockProduct] = useState(null);
-  const [stockAmount,  setStockAmount]  = useState('');
+  const [damagedProduct, setDamagedProduct] = useState(null);
+  const [stockAmount, setStockAmount] = useState('');
 
   // ── POS ──────────────────────────────────────────────────────
-  const [cart,           setCart]           = useState([]);
-  const [searchTerm,     setSearchTerm]     = useState('');
-  const [customerName,   setCustomerName]   = useState('');
+  const [cart, setCart] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [customerName, setCustomerName] = useState('');
   const [customerMobile, setCustomerMobile] = useState('');
-  const [lastReceipt,    setLastReceipt]    = useState(null);
+  const [lastReceipt, setLastReceipt] = useState(null);
 
   // ── Sales / Return Filters ───────────────────────────────────
-  const [salesFilter,     setSalesFilter]     = useState('daily');
+  const [salesFilter, setSalesFilter] = useState('daily');
   const [customStartDate, setCustomStartDate] = useState('');
-  const [customEndDate,   setCustomEndDate]   = useState('');
-  const [returnSearch,    setReturnSearch]    = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const [returnSearch, setReturnSearch] = useState('');
 
   // ── Stats / UI ───────────────────────────────────────────────
   const [blurredCards, setBlurredCards] = useState(new Set());
@@ -74,48 +80,48 @@ export default function App() {
 
   // ── Map helpers ──────────────────────────────────────────────
   const mapItem = (row) => ({
-    id:          row.id,
-    name:        row.name,
-    brand:       row.brand || '',
-    type:        row.type,
-    buyPrice:    Number(row.buy_price)    || 0,
+    id: row.id,
+    name: row.name,
+    brand: row.brand || '',
+    type: row.type,
+    buyPrice: Number(row.buy_price) || 0,
     retailPrice: Number(row.retail_price) || 0,
-    stock:       Number(row.stock)        || 0,
-    createdAt:   row.created_at,
-    updatedAt:   row.updated_at,
+    stock: Number(row.stock) || 0,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   });
 
   const mapSale = (row) => ({
-    id:              row.id,
-    customerName:    row.customer_name,
-    customerMobile:  row.customer_mobile,
-    cashierName:     row.cashier_name,
-    receiptNo:       row.receipt_no,
-    items:           row.items || [],
-    total:           Number(row.total) || 0,
-    timestamp:       row.timestamp,
-    customer_name:   row.customer_name,
+    id: row.id,
+    customerName: row.customer_name,
+    customerMobile: row.customer_mobile,
+    cashierName: row.cashier_name,
+    receiptNo: row.receipt_no,
+    items: row.items || [],
+    total: Number(row.total) || 0,
+    timestamp: row.timestamp,
+    customer_name: row.customer_name,
     customer_mobile: row.customer_mobile,
-    cashier_name:    row.cashier_name,
-    receipt_no:      row.receipt_no,
+    cashier_name: row.cashier_name,
+    receipt_no: row.receipt_no,
   });
 
   const mapOrder = (row) => ({
-    id:             row.id,
-    orderNo:        row.order_no,
-    vendorName:     row.vendor_name,
-    vendorPhone:    row.vendor_phone,
-    vendorAddress:  row.vendor_address,
-    items:          row.items || [],
-    status:         row.status,
-    createdAt:      row.created_at,
-    receivedAt:     row.received_at,
-    order_no:       row.order_no,
-    vendor_name:    row.vendor_name,
-    vendor_phone:   row.vendor_phone,
+    id: row.id,
+    orderNo: row.order_no,
+    vendorName: row.vendor_name,
+    vendorPhone: row.vendor_phone,
+    vendorAddress: row.vendor_address,
+    items: row.items || [],
+    status: row.status,
+    createdAt: row.created_at,
+    receivedAt: row.received_at,
+    order_no: row.order_no,
+    vendor_name: row.vendor_name,
+    vendor_phone: row.vendor_phone,
     vendor_address: row.vendor_address,
-    created_at:     row.created_at,
-    received_at:    row.received_at,
+    created_at: row.created_at,
+    received_at: row.received_at,
   });
 
   // ── Fetchers ─────────────────────────────────────────────────
@@ -137,6 +143,22 @@ export default function App() {
     if (!error && data) setOrders(data.map(mapOrder));
   }, []);
 
+  const fetchDamagedStock = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('damaged_stock')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!error && data) {
+        setDamagedStock(data);
+      } else if (error && (error.code === 'PGRST205' || error.message?.includes('does not exist'))) {
+        setDamagedStock([]);
+      }
+    } catch (err) {
+      console.warn('Damaged stock fetch error:', err);
+    }
+  }, []);
+
   const fetchAdminPin = useCallback(async () => {
     const { data } = await supabase
       .from('settings').select('value').eq('id', 'adminPin').maybeSingle();
@@ -144,8 +166,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    fetchInventory(); fetchSales(); fetchOrders(); fetchAdminPin();
-  }, [fetchInventory, fetchSales, fetchOrders, fetchAdminPin]);
+    fetchInventory(); fetchSales(); fetchOrders(); fetchDamagedStock(); fetchAdminPin();
+  }, [fetchInventory, fetchSales, fetchOrders, fetchDamagedStock, fetchAdminPin]);
 
   // ── Realtime ─────────────────────────────────────────────────
   useEffect(() => {
@@ -158,25 +180,32 @@ export default function App() {
     const ordersChannel = supabase.channel('orders-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
       .subscribe();
+    const damagedChannel = supabase.channel('damaged-stock-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'damaged_stock' }, fetchDamagedStock)
+      .subscribe();
+
     return () => {
       supabase.removeChannel(invChannel);
       supabase.removeChannel(salesChannel);
       supabase.removeChannel(ordersChannel);
+      supabase.removeChannel(damagedChannel);
     };
-  }, [fetchInventory, fetchSales, fetchOrders]);
+  }, [fetchInventory, fetchSales, fetchOrders, fetchDamagedStock]);
 
   // ── Stats ─────────────────────────────────────────────────────
   useEffect(() => {
-    const inventoryCost = inventory.reduce((s, p) => s + p.buyPrice    * p.stock, 0);
-    const retailValue   = inventory.reduce((s, p) => s + p.retailPrice * p.stock, 0);
-    const totalRevenue  = sales.reduce((s, sale) => s + (sale.total || 0), 0);
-    const totalProfit   = sales.reduce((s, sale) =>
+    const inventoryCost = inventory.reduce((s, p) => s + p.buyPrice * p.stock, 0);
+    const retailValue = inventory.reduce((s, p) => s + p.retailPrice * p.stock, 0);
+    const totalRevenue = sales.reduce((s, sale) => s + (sale.total || 0), 0);
+    const totalProfit = sales.reduce((s, sale) =>
       s + (sale.items || []).reduce((a, i) => {
         const rq = i.returnedQuantity || 0;
         return a + (i.soldAt - i.buyPrice) * (i.quantity - rq);
       }, 0), 0);
-    setStats({ inventoryCost, retailValue, totalRevenue, totalProfit });
-  }, [inventory, sales]);
+    const totalDamagedLoss = (damagedStock || []).reduce((s, d) =>
+      s + (Number(d.total_loss) || (Number(d.buy_price) * Number(d.quantity)) || 0), 0);
+    setStats({ inventoryCost, retailValue, totalRevenue, totalProfit, totalDamagedLoss });
+  }, [inventory, sales, damagedStock]);
 
   // ── Tab navigation ────────────────────────────────────────────
   const requestTab = (tab) => {
@@ -228,6 +257,20 @@ export default function App() {
     });
   };
 
+  const handleDamagedSuccess = ({ records, productId, newStock, damagedRecord }) => {
+    fetchDamagedStock();
+    fetchInventory();
+  };
+
+  const handleRestoreSuccess = ({ recordId, productId, restoredQty }) => {
+    if (productId) {
+      setInventory(prev => prev.map(p => p.id === productId ? { ...p, stock: p.stock + restoredQty } : p));
+    }
+    setDamagedStock(prev => prev.filter(d => d.id !== recordId));
+    fetchDamagedStock();
+    fetchInventory();
+  };
+
   // ── Render ────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#f0f9ff]">
@@ -238,7 +281,7 @@ export default function App() {
         onChangePin={() => setShowChangePinModal(true)}
       />
 
-      <div className="max-w-[1280px] mx-auto px-6 py-5">
+      <div className="max-w-[1280px] mx-auto px-3 sm:px-6 py-3 sm:py-5">
 
         {activeTab === 'pos' && (
           <PosTab
@@ -268,6 +311,9 @@ export default function App() {
             setShowAddStockModal={setShowAddStockModal}
             stockProduct={stockProduct} setStockProduct={setStockProduct}
             stockAmount={stockAmount} setStockAmount={setStockAmount}
+            damagedStock={damagedStock}
+            onOpenDamagedModal={(product) => { setDamagedProduct(product); setShowDamagedModal(true); }}
+            onOpenDamagedHistory={() => setShowDamagedHistory(true)}
             stats={stats} blurredCards={blurredCards} toggleBlur={toggleBlur}
             confirm={confirm}
             alert={alert}
@@ -316,6 +362,29 @@ export default function App() {
           setShowAddStockModal={setShowAddStockModal}
           stockProduct={stockProduct} setStockProduct={setStockProduct}
           stockAmount={stockAmount} setStockAmount={setStockAmount}
+          confirm={confirm}
+          alert={alert}
+        />
+      )}
+      {showDamagedModal && (
+        <DamagedStockModal
+          showDamagedModal={showDamagedModal}
+          setShowDamagedModal={setShowDamagedModal}
+          inventory={inventory}
+          product={damagedProduct}
+          setProduct={setDamagedProduct}
+          onSuccess={handleDamagedSuccess}
+          confirm={confirm}
+          alert={alert}
+        />
+      )}
+      {showDamagedHistory && (
+        <DamagedHistoryModal
+          showModal={showDamagedHistory}
+          setShowModal={setShowDamagedHistory}
+          damagedStock={damagedStock}
+          inventory={inventory}
+          onRestoreSuccess={handleRestoreSuccess}
           confirm={confirm}
           alert={alert}
         />
